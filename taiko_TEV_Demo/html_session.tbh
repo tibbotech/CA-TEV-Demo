@@ -1,0 +1,19 @@
+'***********************************************************************************************************
+'			HTML_SESSION.TBS
+'***********************************************************************************************************
+
+const SESSION_LEN=8
+const LOGIN_TIMEOUT=900
+enum login_state
+	INIT,
+	LOGIN, 
+	LOGOUT,
+	EXPIRED,
+	INVALID_LOGIN,
+	INVALID_SESSION
+end enum
+
+declare sub print_login_state
+declare sub login_verify
+declare sub html_print_session 
+declare sub password_verify

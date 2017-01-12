@@ -1,0 +1,259 @@
+'*************************************************************************************************************************
+'           LCD Library
+'	This library contains all other reusable function that is related to LCD display
+'*************************************************************************************************************************
+
+include "global.tbh"
+
+'--------------------------------------------
+sub lcd_init
+'LCD initialize sequence, varies with different LCD type, or different board layout
+
+		
+	#if LCD_TYPE=SAMSUNG_S6B0108
+	
+		lcd.iomapping="44,46,40,41,43,42,4" 'RST,EN,CS1,CS2,DI,RW,data_bus
+		io.num=PL_IO_NUM_46 'EN
+		io.enabled=YES
+		io.num=PL_IO_NUM_44 'RST
+		io.enabled=YES
+		io.num=PL_IO_NUM_40 'CS1
+		io.enabled=YES
+		io.num=PL_IO_NUM_41 'CS2
+		io.enabled=YES
+		io.num=PL_IO_NUM_42 'R/-W
+		io.enabled=YES
+		io.num=PL_IO_NUM_43 'D/-I
+		io.enabled=YES
+		lcd.width=128
+		lcd.height=64
+		lcd.rotated=NO
+		lcd.inverted=NO
+		lcd.enabled=YES
+		lcd_set_contrast(11)
+	
+	#elif LCD_TYPE=HIMAX_HX8309
+	
+		io.num=PL_IO_NUM_47
+		io.enabled=YES
+		io.state=HIGH
+		lcd.iomapping="44,43,42,41,40,4" 'RST,DC,WR,RD,CS,data_bus
+		io.num=PL_IO_NUM_40 'RST
+		io.enabled=YES
+		io.num=PL_IO_NUM_41 'DC
+		io.enabled=YES
+		io.num=PL_IO_NUM_42 'WR
+		io.enabled=YES
+		io.num=PL_IO_NUM_43 'RD
+		io.enabled=YES
+		io.num=PL_IO_NUM_44 'CS
+		io.enabled=YES
+
+		lcd.width=176
+		lcd.height=220
+		lcd.rotated=NO
+		lcd.inverted=NO
+		lcd.enabled=YES
+	#else
+	
+		lcd.iomapping="44,43,42,41,40,4" 'RST,DC,WR,RD,CS,data_bus
+		io.num=PL_IO_NUM_40 'RST
+		io.enabled=YES
+		io.num=PL_IO_NUM_41 'DC
+		io.enabled=YES
+		io.num=PL_IO_NUM_42 'WR
+		io.enabled=YES
+		io.num=PL_IO_NUM_43 'RD
+		io.enabled=YES
+		io.num=PL_IO_NUM_44 'CS
+		io.enabled=YES
+		lcd.width=128
+		lcd.height=96
+		lcd.rotated=NO
+		lcd.inverted=NO
+		lcd.enabled=YES
+	#endif
+
+		
+end sub
+
+'--------------------------------------------
+#if LCD_TYPE=SAMSUNG_S6B0108
+
+sub lcd_set_contrast(level as byte)
+'Contrast control shares the data bus with the LCD. Initialize LCD first, 
+'then set the contrast (before LCD initialization the bus may be driven by the LCD)
+
+	'enable port, output data
+	io.portnum=PL_IO_PORT_NUM_4
+	io.portenabled=255
+	io.portstate=level
+	
+	'generate strobe for the data register (on the LCD PCB)
+	io.num=PL_IO_NUM_48
+	io.enabled=YES
+	io.state=HIGH
+	io.state=LOW
+	
+	'disable port
+	io.portenabled=0
+
+end sub
+#endif
+'--------------------------------------------
+public sub lcd_clear(x as byte, y as byte, width as byte, height as byte)
+'clear the section of the lcd defined by parameters.
+	lcd.forecolor = LCD_BACKCOLOR
+	lcd.fill(x,y,width,height)
+	lcd.forecolor = LCD_FORECOLOR
+end sub
+
+'--------------------------------------------
+public sub lcd_print_msg(msg as string,x as byte, y as byte, w as byte, h as byte, bolder as no_yes)
+'This is a popup msgbox, it prints a message on the LCD.
+	romfile.open(LCD_FIX_FONT)
+	lcd.setfont(romfile.offset)
+	lcd.textverticalspacing = 1
+	lcd_clear(x,y,w,h)
+	if bolder = YES then lcd.rectangle(x,y,x+w-1,y+h-1)
+	lcd.textalignment = PL_LCD_TEXT_ALIGNMENT_MIDDLE_CENTER
+	lcd.printaligned(msg,x+1,y+3,w-2,h-6)
+end sub
+
+'--------------------------------------------
+sub lcd_display_button(F1_ADD as word,
+	F2_ADD as word,
+	F3_ADD as word,
+	F4_ADD as word, 			'F#_ADD are the offset address of the icon in the BMP file.
+	byref on_off as string(4),  'on_off string consist with 4 characters (0 or 1), which indicates if the icon is highlighted.  For example if on_off = "0100", this means, only icon F2 are highlighted, rest are normal.
+	repaint as no_yes,			'If repaint = yes, then all 4 icons are refreshed, else only the those icons that are previously or now highlighted, are being refreshed.
+	revert as no_yes			'If revert = yes, then switch lcd forecolor and backcolor, meaning those icons which were normal, now are highlighted, and vice versa.
+	)
+'This function prints 4 stored icon images on the LCD, 
+	dim bmp_width as word
+	dim F1_on,F2_on,F3_on,F4_on as no_yes
+	bmp_width = (lcd.width/4)-1
+	if mid(on_off,1,1) = "0" then F1_on = NO else F1_on = YES 
+	if mid(on_off,2,1) = "0" then F2_on = NO else F2_on = YES 
+	if mid(on_off,3,1) = "0" then F3_on = NO else F3_on = YES 
+	if mid(on_off,4,1) = "0" then F4_on = NO else F4_on = YES 
+	
+	if repaint = YES then 
+	romfile.open(ICON_FILE)	
+
+		lcd_clear(0,lcd.height - 14,lcd.width,14)
+		lcd.fill(0,lcd.height - 14,lcd.width,1)
+		lcd.fill(lcd.width/4-1,lcd.height - 12,2,12)
+		lcd.fill((lcd.width/4)*2,lcd.height - 12,2,12)
+		lcd.fill((lcd.width/4)*3+1,lcd.height - 12,2,12)
+		lcd.forecolor = LCD_FORECOLOR
+		lcd.backcolor = LCD_BACKCOLOR			
+		if F1_ADD <> BMP_NONE then lcd.bmp(romfile.offset,0,lcd.height - 13,F1_ADD,0,bmp_width,13)
+		if F2_ADD <> BMP_NONE then lcd.bmp(romfile.offset,(lcd.width/4)+1,lcd.height - 13,F2_ADD,0,bmp_width,13)
+		if F3_ADD <> BMP_NONE then lcd.bmp(romfile.offset,(lcd.width/4)*2+2,lcd.height - 13,F3_ADD,0,bmp_width,13)
+		if F4_ADD <> BMP_NONE then lcd.bmp(romfile.offset,(lcd.width/4)*3+3,lcd.height - 13,F4_ADD,0,bmp_width,13)
+
+	end if
+	romfile.open(ICON_FILE)
+	if revert = NO then
+		lcd.forecolor = LCD_BACKCOLOR
+		lcd.backcolor = LCD_FORECOLOR
+	else
+		lcd.forecolor = LCD_FORECOLOR
+		lcd.backcolor = LCD_BACKCOLOR
+	end if
+
+	if F1_ADD <> BMP_NONE and F1_on = yes then lcd.bmp(romfile.offset,0,lcd.height - 13,F1_ADD,0,bmp_width,13)
+	if F2_ADD <> BMP_NONE and F2_on = yes then lcd.bmp(romfile.offset,(lcd.width/4)+1,lcd.height - 13,F2_ADD,0,bmp_width,13)
+	if F3_ADD <> BMP_NONE and F3_on = yes then lcd.bmp(romfile.offset,(lcd.width/4)*2+2,lcd.height - 13,F3_ADD,0,bmp_width,13)
+	if F4_ADD <> BMP_NONE and F4_on = yes then lcd.bmp(romfile.offset,(lcd.width/4)*3+3,lcd.height - 13,F4_ADD,0,bmp_width,13)
+	lcd.forecolor = LCD_FORECOLOR
+	lcd.backcolor = LCD_BACKCOLOR
+end sub
+
+'--------------------------------------------
+public sub lcd_disable_dhcp
+'print dhcp failed message, and apply a delay.
+	dim w as word
+	lcd_print_msg(DHCP_FAIL,21,30,lcd.width-42,24,yes)
+	while sys.timercount-w < 20 
+		doevents
+	wend
+	exit sub
+end sub
+
+'--------------------------------------------
+public sub lcd_show_ID(x as word, y as word, byref sID as string(ID_LEN), byref sResult as string(50))
+'print the id on the LCD, if sID string is empty, print "READY"
+	romfile.open(LCD_FIX_FONT)
+	lcd.setfont(romfile.offset)
+	lcd.texthorizontalspacing=1
+	dim s as string(ID_LEN)
+	if sResult = "" then		
+		if sID <> "" then 
+			lcd.forecolor = LCD_FORECOLOR
+			lcd_clear(x,y,lcd.getprintwidth(sID)+1,FONT_HEIGHT+1)
+			lcd.print(sID,x+1,y+1)
+		else
+
+			lcd_clear(x,y,lcd.getprintwidth(strgen(ID_LEN,"0"))+1,FONT_HEIGHT+1)
+			lcd.print(s,x+3,y+1)
+		end if
+	else
+		lcd_print_msg(sResult,21,40,lcd.width-42,24,yes)
+	end if
+end sub
+
+'--------------------------------------------
+
+public sub lcd_print_logo
+	dim t as word
+	romfile.open(LCD_STD_FONT)
+	lcd.setfont(romfile.offset)
+	lcd.forecolor = LCD_FORECOLOR
+	lcd.backcolor = LCD_BACKCOLOR
+	lcd_clear(0,0,lcd.width,lcd.height)
+
+	lcd.textalignment = PL_LCD_TEXT_ALIGNMENT_TOP_LEFT	
+	lcd.textverticalspacing = 10
+	lcd.printaligned("TIBBO TECHNOLOGY`EM1000-TEV DEMO",4,10,lcd.width-4, lcd.height-10)	
+
+	lcd.print("Please wait...",4,lcd.height-FONT_HEIGHT-1)
+	t = sys.timercount
+	while true
+		if sys.timercount > t + 0 then exit while
+	wend
+end sub
+
+'--------------------------------------------------------------------
+public sub lcd_print_header
+'This subroutin prints the "Setup Menu" string on the LCD
+	lcd_clear(0,0,lcd.width,lcd.height)
+	romfile.open(LCD_STD_FONT)
+	lcd.setfont(romfile.offset)
+	lcd.print("Setup Menu",26,1)
+	lcd.fill(19, 10, lcd.width-38,2)
+end sub
+
+'--------------------------------------------------------------------
+public sub lcd_print_bar(x as byte, y as byte, w as byte, h as byte, per as byte)
+'This subroutin prints a percentage bar on the LCD screen
+	dim i, q, m as byte
+	dim p as word
+	q = w/4
+	m = w mod 4
+	p = (w*per)
+	p = p/100
+	lcd_clear(x,y,w,h)
+	lcd.rectangle(x,y,x+w,y+h)
+	for i = 1 to 3
+		if m > 0 then 
+			lcd.fill(x+(q*i)+1,y,1,h)
+			m = m-1
+		else
+			lcd.fill(x+(q*i),y,1,h)
+		end if
+	next i
+	lcd.fill(x,y,p,h)
+end sub
+

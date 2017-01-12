@@ -1,0 +1,425 @@
+'***********************************************************************************************************
+'			NETWORK COMMAND LIBRARY (UNIVERSAL PART)
+'***********************************************************************************************************
+
+include "global.tbh"
+
+dim net_login as no_yes
+dim net_login_transport as net_cmd_proto_options
+dim net_login_sock as byte
+dim net_login_ip as string(16)
+dim net_cmd_bcast_sel as no_yes
+dim net_login_tout_ctr as word
+dim fware_block_ctr,i as word
+
+public dim bcast_sel as no_yes
+public dim num_sdf as byte
+public dim sdf_addr(MAX_NUM_SDF_LINES) as word
+
+declare param_on,param_dn as string(8)
+'-------------------------------------------------------------
+public sub net_cmd_init
+'Must be called prior to using network commands!
+
+	dim str_start,str_end as word
+
+	'Init sdf_addr array with offsets for lines from sdf.txt file
+	num_sdf=0
+	
+	romfile.open("sdf.txt") 'setting definition file
+	str_start=1
+	str_end=romfile.find(str_start,chr(13),1)
+	while str_end<>0
+		if num_sdf>=MAX_NUM_SDF_LINES then
+			sys.halt
+			num_sdf=0 'you need to increase MAX_NUM_SDF_LINES to >= actual num of lines in sdf.txt
+		end if
+		
+		sdf_addr(num_sdf)=str_start
+		num_sdf=num_sdf+1
+		str_start=str_end+2	'because need to skip over LF
+		str_end=romfile.find(str_start,chr(13),1)
+	wend
+
+	init_x_flags()
+
+end sub
+
+'-------------------------------------------------------------
+public sub net_cmd_proc(byref s as string(140), cmd_transport as net_cmd_proto_options, cmd_bcast as no_yes, byref cmd_source_ip as string, cmd_source_port as word, cmd_sock as byte, error_mode as no_yes, net_login_allowed as no_yes)
+	dim ss as string (1)
+	dim stg_data as string(32)
+	dim x,pos,pos2,f as byte
+	dim ser_num as string(8) 'to keep serial number of commands (command ID)
+	dim cmd_src_valid as no_yes
+	dim index as byte
+	dim s2 as string(64)
+	dim reply_str as string
+	dim ip_change_needed as no_yes
+	dim ser_port_num as byte
+	dim curr_block_num,num_sectors as word
+
+	ip_change_needed=NO
+	reply_str="" 'will prepare our reply here
+
+	if cmd_transport=CMD_INBAND then
+		s=left(s,len(s)-1)
+	end if
+	
+	'is command source valid?
+	if cmd_transport=net_login_transport then
+		cmd_src_valid=YES
+	else
+		cmd_src_valid=NO
+	end if
+
+	if cmd_transport=CMD_UDP then
+		if cmd_source_ip<>net_login_ip then cmd_src_valid=NO
+		if cmd_bcast=NO then last_udp_cmd_port_change(cmd_source_port) 	
+	else
+		if cmd_sock<>net_login_sock then cmd_src_valid=NO
+	end if
+	
+	'is this a broadcast without pre-selection?
+	if cmd_bcast = YES and net_cmd_bcast_sel = NO then
+		'YES, so see if this is allowed for the current command
+		ss=left(s,1)
+		if ss<>"X" and ss<>"U" and ss<>"A" and ss<>"W" and ss<>"V" and ss<>"T" then
+			goto reply_null
+		end if
+	end if
+
+	'see if command got serial number, separate it if so (special processing for "D")
+	ser_num=""
+	if left(s,1)="D" then
+		x=instr(132,s,"|",1)
+	else
+		x=instr(1,s,"|",1)
+	end if
+	if x>0 then
+		ser_num=right(s,len(s)-x+1)
+		s=left(s,x-1)
+	end if
+
+	'see of command has "^" escape sequence included (except for "D" command)
+	index=0
+	if left(s,1)<>"D" then
+		x=instr(1,s,`^`,1)
+		if x>0 then
+			'yes, the sequence is included -- extract it
+			index=val(mid(s,x+1,1))
+			s2=right(s,len(s)-x-1)
+			s=left(s,x-1)+s2
+		end if
+	end if
+
+	select case left(s,1)
+
+	case "X": 'echo command (device info) -----------------------
+		reply_str=net.mac+"/00000"+setting_get("PN",0)+get_x_flags()+param_on+"/"+param_dn
+		goto reply_ok_have_data
+
+
+	case "G": 'get setting --------------------------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		select case setting_sg(mid(s,2,2),index,reply_str,EN_STG_GET)
+		case EN_STG_STATUS_OK:
+			goto reply_ok_have_data
+		case EN_STG_STATUS_UNKNOWN:
+			goto reply_err
+		case EN_STG_STATUS_INVALID_INDEX:
+			goto reply_err
+		case else:
+			goto reply_failed
+		end select
+
+
+	case "S": 'set setting --------------------------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		select case setting_sg(mid(s,2,2),index,right(s,len(s)-3),EN_STG_SET)
+		case EN_STG_STATUS_OK:
+			goto reply_ok_have_data
+		case EN_STG_STATUS_INVALID:
+			goto reply_err
+		case EN_STG_STATUS_INVALID_INDEX:
+			goto reply_err
+		case EN_STG_STATUS_UNKNOWN:
+			goto reply_err
+		case else:
+			goto reply_failed
+		end select
+	
+
+	case "T": 'return own IP ------------------------------------
+		reply_str=cmd_source_ip
+		goto reply_ok_have_data	
+
+	case "B": 'buzz the device ---------------------------------- OK
+		pat.play("**GRGRGRGR",YES)
+		goto reply_ok
+	
+
+	case "A": 'assign new IP-address ----------------------------
+		
+		'extract MAC field and compare it to ours
+		pos=instr(1,s,"/",1)
+		if pos=0 then goto reply_null
+		s2=mid(s,2,pos-2)
+		if ddval(s2)<>ddval(net.mac) then goto reply_null
+		
+		'net login allowed?
+		if net_login_allowed=NO then goto reply_denied
+		
+		'extract password field and compare to ours (unless in error_mode)
+		pos2=instr(1,s,"/",2)
+		if pos2=0 then goto reply_err
+		s2=mid(s,pos+1,pos2-pos-1)
+		if error_mode=NO then
+			if setting_sg("PW",0,reply_str,EN_STG_GET)=EN_STG_STATUS_OK then
+				if s2<>reply_str then goto reply_denied
+			end if
+		end if
+		
+		'set new setting value
+		s2=right(s,len(s)-pos2)
+		if setting_sg("IP",0,s2,EN_STG_SET)<>EN_STG_STATUS_OK then goto reply_failed
+		'set the flag to remember that we will need to change IP!
+		ip_change_needed=YES 
+		goto reply_ok
+
+	
+	case "L": 'login --------------------------------------------
+		
+		'reject if higher priority session already in progress. For network commands, the following
+		'priority is set (in high-to-low order): UDP, TELNET, INBAND.
+		'On the same priority level it is possible 'to re-login, but only from the same IP 
+		if net_login_allowed=NO then goto reply_rejected
+		
+		if net_login=YES then    
+			if net_login_transport<>cmd_transport then
+				select case net_login_transport
+				case CMD_TELNET:
+					if cmd_transport=CMD_UDP then goto reply_rejected
+				case CMD_INBAND:
+					if cmd_transport=CMD_UDP or cmd_transport=CMD_TELNET then goto reply_rejected
+				end select
+				
+			else	
+				if cmd_transport=CMD_UDP then
+					if net_login_ip<>cmd_source_ip then goto reply_rejected
+				else
+					if net_login_sock<>cmd_sock then goto reply_rejected
+				end if
+			end if
+		end if
+
+		stg_data=setting_get("PW",0)		
+
+		if error_mode=YES then
+			goto accept_login
+		else
+			if right(s,len(s)-1)<> stg_data then
+				net_login=NO
+				net_login_tout_ctr=0
+				goto reply_denied
+			end if 
+		end if
+	
+accept_login:
+		net_login=YES
+		net_login_tout_ctr=LOGIN_TOUT_CONST
+		net_login_transport=cmd_transport
+		net_login_ip=cmd_source_ip
+		net_login_sock=cmd_sock
+		goto reply_ok
+
+
+	case "O": 'logout -------------------------------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		net_login=NO
+		net_login_tout_ctr=0
+		logout_notification(sock.num)
+		goto reply_ok
+		
+
+	case "I": 'initialize all settings --------------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		if settings_restore_def(NO)<>EN_STG_STATUS_OK then goto reply_failed
+		goto reply_ok
+		
+
+	case "E": 'reboot -------------------------------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		sys.reboot
+		
+
+	case "V": 'version string -----------------------------------
+		reply_str=FIRMWARE_VERSION
+		goto reply_ok_have_data
+		
+
+	case "W": 'select in broadcast mode -------------------------
+		net_cmd_bcast_sel=NO
+		reply_str=right(s,len(s)-1)
+		if ddval(reply_str)<>ddval(net.mac) then goto reply_null
+		net_cmd_bcast_sel=YES
+		goto reply_ok
+		
+
+	case "H": 'hardware version (legacy command) ----------------
+		reply_str="1A"
+		goto reply_ok_have_data
+
+	case "C": 'number of SDF lines to load (new command) --------
+		reply_str=str(num_sdf)
+		goto reply_ok_have_data		
+	
+
+	case "F": 'get specified SDF line ---------------------------
+		x=val(right(s,len(s)-1))
+		if x>=num_sdf then goto reply_err
+		romfile.open("sdf.txt")
+		romfile.pointer=sdf_addr(x)
+		
+		if x=num_sdf-1 then
+			reply_str=romfile.getdata(romfile.size-sdf_addr(x))
+		else
+			reply_str=romfile.getdata(sdf_addr(x+1)-sdf_addr(x))
+		end if
+		goto reply_ok_have_data
+	
+	case "Q" 'reset firmware upload process ---------------------
+		fware_block_ctr=0
+		goto reply_ok
+
+
+	case "D" 'upload one data block of firmware -----------------
+		if len(s)<>131 then goto reply_err
+		curr_block_num=256*asc(mid(s,2,1))+asc(mid(s,3,1))
+		if curr_block_num>fware_block_ctr then goto reply_out_of_seq 'out of sequence		 
+		if curr_block_num<fware_block_ctr then goto reply_ok 'repeated block
+		if curr_block_num>=fd.availableflashspace*2 then goto reply_out_of_mem 'no space to store new file
+		
+		'we fit two 128-byte packets into each sector
+		fd.buffernum=0
+		if (curr_block_num and 1)=0 then
+			'fill the first half of the buffer
+			fd.setbuffer(mid(s,4,128),0)
+		else
+			'fill the second half of the buffer and program the sector
+			fd.setbuffer(mid(s,4,128),128)
+			fd.setsector(curr_block_num/2)
+		end if
+		'next block number
+		fware_block_ctr=fware_block_ctr+1
+		x=fware_block_ctr/256
+		reply_str=chr(x)+chr(fware_block_ctr-x*256) 
+		goto reply_ok_have_data
+
+
+	case "N" 'firmware programming request ----------------------
+		if net_login=NO or cmd_src_valid=NO then goto reply_denied
+		pat.play("G~",PL_PAT_CANINT)
+		'the following delay will make sure that the pattern will be displayed
+		'we do this because fd.copyfirmware will disable interrupts
+		i=sys.timercount
+		while i=sys.timercount
+		wend
+		'we might have one unsaved sector!
+		if (curr_block_num and 1)=0 then
+			fd.setsector(curr_block_num/2)
+		end if
+		
+		num_sectors=fware_block_ctr/2
+		if (fware_block_ctr and 1)<>0 then
+			num_sectors=num_sectors+1
+		end if
+		'copy between areas of flash
+		fd.copyfirmware(num_sectors)
+
+
+	case "R" 'reset overflow command ----------------------------
+		'*******************************************************************	
+	
+	
+	case else: 'invalid command ---------------------------------
+		goto reply_err
+
+	end select
+
+	'---------- after processing command we are landing here to generate different reply codes
+
+reply_out_of_mem:
+	reply_str="O"
+	goto add_seq_num	
+
+reply_out_of_seq:
+	reply_str="S"
+	goto add_seq_num	
+
+reply_rejected:
+	reply_str="R"
+	goto add_seq_num
+
+reply_err:
+	reply_str="C"
+	goto add_seq_num
+
+reply_denied:
+	reply_str="D"
+	goto add_seq_num
+
+reply_failed:
+	reply_str="F"
+	goto add_seq_num
+
+reply_ok:
+	reply_str="A"
+	goto add_seq_num
+
+reply_ok_have_data:
+	reply_str="A"+reply_str
+	goto add_seq_num
+
+add_seq_num:
+ 	reply_str=reply_str+ser_num
+
+	sock.num=cmd_sock 'restore socket (we may have changed it)
+
+	'and finally send!
+	if cmd_transport=CMD_INBAND then
+		sock.setsendinband(reply_str)
+	else
+		sock.setdata(reply_str)
+		sock.send
+	end if
+
+
+	'do we need to change the IP?
+	if ip_change_needed=YES then set_net_ip()
+
+reply_null:
+end sub
+
+
+'-------------------------------------------------------------
+sub net_cmd_1sec_timer_proc
+'Hook this up to the on_sys_timer event in such a fashion that this procedure is
+'called once a second. This procedure implements login timeout.
+
+	if net_login_tout_ctr>0 then
+		net_login_tout_ctr=net_login_tout_ctr-1
+		if net_login_tout_ctr=0 then
+			net_login=NO
+		end if
+	end if
+end sub
+
+'-------------------------------------------------------------
+sub sock_closed_check_net_login(sock_num as byte)
+'Socket connection has been closed. Was somebody logged in on this socket?
+
+	if net_login=YES and sock_num=net_login_sock then
+		net_login=NO
+	end if
+end sub

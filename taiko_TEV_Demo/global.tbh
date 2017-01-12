@@ -1,0 +1,86 @@
+
+include "boot.tbh"
+include "settings.tbh"
+include "net_cmd.tbh"
+include "ser_cmd.tbh"
+include "dhcp.tbh"
+include "flags.tbh"
+include "SNTP.tbh"
+include "event_log.tbh"
+include "reader.tbh"
+include "lcd_library.tbh"
+include "ui_input_box.tbh"
+include "ui_list_box.tbh"
+include "ui_menu.tbh"
+include "ui_msg_box.tbh"
+include "ui_clock.tbh"
+include "ds_variables_constants.tbh"
+include "lcd_msg.tbh"
+include "html.tbh"
+include "html_session.tbh"
+
+'=============================================================
+'	MISC
+'=============================================================
+
+'ASCII for special characters
+const TAB=9
+const LF=10
+const CR=13
+const STX=2
+const ETX=3
+
+'corresponded keycode returned by the on_kp_event
+const keycodeF1 = 0
+const keycodeF2 = 16
+const keycodeF3 = 32
+const keycodeF4 = 48
+const keycode1 = 1
+const keycode2 = 17
+const keycode3 = 33
+const keycodeE = 49
+const keycode4 = 2
+const keycode5 = 18
+const keycode6 = 34
+const keycodeC = 50
+const keycode7 = 3
+const keycode8 = 19
+const keycode9 = 35
+const keycode0 = 51
+
+'---------------------------------------------------------------------------------------'
+
+enum on_kp_event_destinations
+	ON_KP_EVENT_DEST_NONE
+	ON_KP_EVENT_DEST_INPUT_BOX
+	ON_KP_EVENT_DEST_LIST_BOX
+	ON_KP_EVENT_DEST_MSG_BOX
+	ON_KP_EVENT_DEST_MENU
+	ON_KP_EVENT_DEST_CLOCK
+	ON_KP_EVENT_MC_SET
+end enum
+
+enum on_sys_timer_event_destinations
+	ON_SYS_TIMER_EVENT_DEST_NONE
+	ON_SYS_TIMER_EVENT_DEST_INPUT_BOX
+	ON_SYS_TIMER_EVENT_DEST_LIST_BOX
+	ON_SYS_TIMER_EVENT_DEST_MSG_BOX
+	ON_SYS_TIMER_EVENT_DEST_MENU
+	ON_SYS_TIMER_EVENT_DEST_CLOCK
+end enum
+
+enum on_reader_event_destinations
+	ON_READER_EVENT_DEST_NONE
+	ON_READER_EVENT_DEST_INIT
+	ON_READER_EVENT_DEST_CLOCK
+end enum
+
+
+
+'---------------------------------------------
+
+declare sub key_led_reset
+declare sub key_led_pressed(key_code as byte)
+declare sub key_led_released(key_code as byte)
+declare function ip_val_chker (byref str_val as string) as boolean
+

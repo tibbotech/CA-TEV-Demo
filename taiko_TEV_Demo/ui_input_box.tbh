@@ -1,0 +1,36 @@
+
+'=============================================================
+'		UI_INPUT_BOX.TBS
+'=============================================================
+
+CONST IB_MAX_LEN = 30
+
+enum ui_input_box_results 
+	INPUT_BOX_RESULT_OK,
+	INPUT_BOX_RESULT_CANCEL,
+	INPUT_BOX_RESULT_TIMEOUT,
+	INPUT_BOX_RESULT_FAIL
+end enum
+
+enum input_box_char_ranges 
+	INPUT_BOX_CHAR_RANGE_09,
+	INPUT_BOX_CHAR_RANGE_AZ,
+	INPUT_BOX_CHAR_RANGE_09AZ
+end enum
+
+declare sub ui_input_box_key_proc(key_event as pl_kp_event_codes, key_code as byte)
+declare sub ui_input_box_timer_proc
+
+declare function ui_input_box(
+	byref mask_str as string(IB_MAX_LEN),
+	byref edit_str as string(IB_MAX_LEN),
+	char_range as input_box_char_ranges,
+	x_coord as word,
+	y_coord as word,
+	width as byte,
+	secret_mode as no_yes,
+	insert_mode as no_yes,
+	initial_pos as byte,
+	timeout as byte,
+	input_length as byte
+) as ui_input_box_results

@@ -1,0 +1,243 @@
+'********************************************************************************
+'	THIS PROJECT CONTAINS STANDARD SETTING LIBRARIES
+'********************************************************************************
+
+include "global.tbh"
+
+
+'Parameters that correspond to settings
+public dim param_on as string(8)			'ON (owner name)
+public dim param_dn as string(8)			'DN (device name)
+public dim on_kp_event_dest as on_kp_event_destinations
+public dim on_sys_timer_event_dest as on_sys_timer_event_destinations
+public dim on_reader_event_dest as on_reader_event_destinations
+
+public dim last_udp_cmd_port as word
+dim divider_by_2 as no_yes
+dim sID as string(16)
+
+declare ui_clock_force_print as no_yes
+declare error_mode as no_yes
+declare sntp_state as sntp_states
+
+'================================================================================
+sub on_sys_init()
+
+	boot()
+	
+end sub
+
+'--------------------------------------------------------------------------------
+sub setting_error_detected
+	'********** ADDITIONAL CODE MAY BE NEEDED **********
+	pat.play("R~",PL_PAT_CANINT)
+	error_mode=YES
+end sub
+
+'--------------------------------------------------------------------------------
+sub last_udp_cmd_port_change(new_port as word)
+	'********** ADDITIONAL CODE MAY BE NEEDED **********
+	'This is for sending J notifications
+	last_udp_cmd_port=new_port
+end sub
+
+'--------------------------------------------------------------------------------
+sub logout_notification(sock_num as byte)
+	'********** CODE NEEDED **********
+end sub
+
+'--------------------------------------------------------------------------------
+sub set_net_ip
+'Correctly sets new IP for use (from the IP setting)
+
+	dim s as string(16)
+	dim x,f as byte
+
+		s=setting_get("IP",0)
+		s=ddval(s)
+		
+		'first number can't be 0 or >223
+		x=asc(left(s,1))
+		if x=0 or x>223 then
+			s=right(s,3)
+			s=chr(1)+s
+		end if
+		
+		'last number can't be 0 or 255
+		x=asc(right(s,1))
+		if x=0 or x=255 then
+			s=left(s,3)+chr(1)
+		end if
+		
+		'shut all sockets!
+		sock.inconenabledmaster=NO 
+		for f=0 to sock.numofsock-1
+			sock.num=f
+			if sock.statesimple<>PL_SSTS_CLOSED then
+				sock.discard
+				while sock.statesimple<>PL_SSTS_CLOSED
+				wend
+			end if
+		next f
+		
+		'change the IP
+		net.ip=ddstr(s)
+		sock.inconenabledmaster=YES 
+
+end sub
+
+'============================================================================
+sub on_kp(key_event as pl_kp_event_codes, key_code as byte)
+
+	select case on_kp_event_dest
+	case ON_KP_EVENT_DEST_INPUT_BOX:
+		ui_input_box_key_proc(key_event,key_code)
+		
+	case ON_KP_EVENT_DEST_LIST_BOX:
+		ui_list_box_key_proc(key_event,key_code)
+		
+	case ON_KP_EVENT_DEST_MSG_BOX:
+		ui_msg_box_key_proc(key_event,key_code)
+			
+	case ON_KP_EVENT_DEST_MENU:
+		ui_menu_key_proc(key_event,key_code)
+	
+	case ON_KP_EVENT_DEST_CLOCK:
+		ui_clock_key_proc(key_event,key_code)
+	case ON_KP_EVENT_MC_SET
+		master_set(sID)
+	end select
+end sub
+
+'============================================================================
+sub on_sys_timer
+
+	select case on_sys_timer_event_dest
+	
+	case ON_SYS_TIMER_EVENT_DEST_INPUT_BOX:
+		ui_input_box_timer_proc
+		
+	case ON_SYS_TIMER_EVENT_DEST_LIST_BOX:
+		ui_list_box_timer_proc
+			
+	case ON_SYS_TIMER_EVENT_DEST_MSG_BOX:
+		ui_msg_box_timer_proc	
+			
+	case ON_SYS_TIMER_EVENT_DEST_MENU:
+		ui_menu_timer_proc
+		
+	case ON_SYS_TIMER_EVENT_DEST_CLOCK:	
+		ui_clock_timer_proc
+	end select
+
+
+	'the following must be called once every second
+	if divider_by_2=NO then
+		divider_by_2=YES
+	else
+		divider_by_2=NO
+		'Now call everything that must be called once a second
+		net_cmd_1sec_timer_proc()
+	end if
+	
+	SNTPAutoSync
+end sub
+'============================================================================
+sub on_ser_data_arrival()
+	dim Pos1,Pos2 as byte
+	dim et as event_item
+	dim s as string
+	s = ser.getdata(255)
+	select case ser.num
+	case SER_COM_NUM:
+		ser.setdata(proc_ser_cmd(s))
+		ser.send
+	case READER_PORT_NUM:
+		sID = sID + s	
+		Pos1 = instr(1,sID,chr(STX),1)	
+		Pos2 = instr(1,sID,chr(ETX),1)
+		if Pos2 > 0 and Pos1 > 0 and Pos2 > Pos1 then 
+			sID = mid(sID,pos1+1,ID_Len)
+			select case on_reader_event_dest
+			case ON_READER_EVENT_DEST_INIT
+				beep.divider = 20000
+				beep.play("BBB",PL_BEEP_CANINT)
+				on_kp_event_dest = ON_KP_EVENT_MC_SET
+				lcd_clear(0,0,lcd.width,lcd.height)
+				lcd_print_msg(MACARD_SET,10,6,lcd.width-20,lcd.height-12,yes)
+			case ON_READER_EVENT_DEST_CLOCK
+				ui_clock_card_read(sID)
+			end select
+		end if
+		if len(sID) > ID_LEN+4 then
+			sID = ""
+		end if
+	end select
+end sub
+'============================================================================
+public sub on_sock_data_arrival
+	dim s as string	
+	dim wYears as word 
+	dim wMonthes as word		
+	dim wDays as word
+	dim wHours as word
+	dim wMinus as word
+	dim wSeconds as word
+	
+	Select case sock.num
+	case SOCK_UDP
+		net_cmd_proc(sock.getdata(255),CMD_UDP,sock.bcast,sock.remoteip,sock.remoteport,sock.num,error_mode,YES)
+		exit sub
+	case SOCK_SNTP
+		if sntp_state = SNTP_QUERYING then 
+			GetSNTPTime(wYears,wMonthes,wDays,wHours,wMinus,wSeconds)	
+			clock_set_time(str(wYears),str(wMonthes),str(wDays),str(wHours),str(wMinus),str(wSeconds),yes)
+		end if
+	case else
+		'extract and discard the data
+		sock.rxclear
+	End select
+end sub
+'============================================================================
+sub on_button_pressed()
+	dim stg_op_result as en_stg_status
+	if button.time > 6 then
+		pat.play("-",PL_PAT_CANINT)
+		stg_op_result=settings_restore_def(NO)
+		
+		if stg_op_result=EN_STG_STATUS_OK then
+			pat.play("G~",PL_PAT_CANINT)
+		else
+			pat.play("R~",PL_PAT_CANINT)
+		end if
+		sys.reboot
+	end if
+end sub
+
+'============================================================================
+sub on_sock_event(newstate as pl_sock_state, newstatesimple as pl_sock_state_simple)
+	if sock.num = SOCK_SNTP and sntp_state = SNTP_CONNECTING then
+		if sock.statesimple=PL_SSTS_EST then
+			SNTPQuery
+			sntp_state = SNTP_QUERYING
+			ui_clock_force_print = YES
+		end if
+		if sock.statesimple = PL_SSTS_CLOSED and sntp_state = SNTP_CONNECTING then
+			sntp_state = SNTP_CONNECT_FAIL	
+		end if
+	end if
+	if newstatesimple = PL_SSTS_CLOSED and sock.num = SOCK_UDP then
+		sock_closed_check_net_login(sock.num) 'maybe need to close login
+	end if
+end sub
+
+'============================================================================
+sub on_kp_overflow()
+	kp.enabled = NO
+	kp.enabled = YES
+end sub
+
+'================================================================================
+public sub on_sock_inband
+		net_cmd_proc(sock.getinband,CMD_INBAND,NO,sock.remoteip,sock.remoteport,sock.num,error_mode,YES)
+end sub

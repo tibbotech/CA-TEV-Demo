@@ -1,0 +1,21 @@
+	Acc	Men	Item	Item				Item
+	lvl	lvl	type	String				Data
+>>	0	0	F	Setup			^
+>>	0	1	F	Network			^
+>>	0	2	N	DHCP					S,L,DH,0-Disabled;1-Enabled;	^
+>>	0	2	N	IP address				S,I,IP,   .   .   .   ,D,12,N	^
+>>	0	2	N	Gateway IP				S,I,GI,   .   .   .   ,D,12,N	^
+>>	0	2	N	Netmask					S,I,NM,   .   .   .   ,D,12,N	^
+>>	0	1	F	Date/Time		^
+>>	0	2	N	Sync Now				C,K	^
+>>	0	2	N	Time Zone				S,L,TZ,0--12;1--11;2--10;3--9;4--8;5--7;6--6;7--5;8--4:30;9--4;10--3;11--3:30;12--2;13--1;14-0;15-+1;16-+2;17-+3;18-+3:30;19-+4;20-+4:30;21-+5;22-+5:30;23-+5:45;24-+6;25-+6:30;26-+7;27-+8;28-+9;29-+9:30;30-+10;31-+11;32-+12;33-+13;	^
+>>	0	2	N	Set Date				S,I,TD,  /  /    ,D,8,N	^
+>>	0	2	N	Set Time				S,I,TT,  :  ,D,4,N	^
+>>	0	2	N	Time Sever IP			S,I,TS,   .   .   .   ,D,12,N	^
+>>	0	2	N	Auto Sync				S,L,TF,0-Disabled;1-Enabled;	^
+>>	0	2	N	Auto Sync Time			S,I,TC,  :  ,D,4,N	^
+>>	0	1	N	Owner Name				S,I,ON,,A,6,N	^
+>>	0	1	N	Device Name				S,I,DN,,A,6,N	^
+>>	0	0	N	Reboot					C,E	^
+>>	1	0	N	Initialize				C,I	^
+>>	1	0	N	Clear Log				C,D	^

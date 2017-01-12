@@ -1,0 +1,102 @@
+<?
+	include "global.tbh"
+	declare login_session as string(SESSION_LEN)
+	declare html_login_state as login_state
+?>
+<html>
+<HEAD>
+<META HTTP-EQUIV="Expires" CONTENT="Tue, 01 Jan 1980 1:00:00 GMT">
+<META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+<script type="text/javascript">
+function IndexPage()
+  {
+  window.top.location.replace("Index.html")
+  }
+</script>
+
+</HEAD>
+<BODY bgcolor= "#FFFFFF" <?login_verify?>>
+<? 
+	if html_login_state <> LOGIN or login_session = "" then goto finish
+?>
+<font face="arial">
+<table width=80% align=center>
+<tr>
+
+<td width=70%>
+
+			<table width=100% align=center border="1" cellspacing="1" cellpadding="2" >
+				<tr align=center>
+					<td><font color = <?sock.setdata(FONT_COLOR_1) sock.send?>><b>Event Filter</b></font></td>
+				</tr>
+			</table>
+
+			<br>
+<tr><td>
+
+			<table align=center border="1" width=100%>
+				<form action="event_table.html?" method="get" target = table>
+					<? html_print_session?>
+					<tr><td width=40%><b>Before </b><br>yyyy-mm-dd hr:min</td>
+						<td width=60%>
+							<table>
+								<tr>
+								<td><input type="text" size = "4" maxlength = "4" name="byear" value="" /></td>
+								<td>-</td>
+								<td><input type="text" size = "2" maxlength = "2" name="bmonth" value="" /></td>
+								<td>-</td>
+								<td><input type="text" size = "2" maxlength = "2" name="bdate" value="" /></td>
+								<td> </td>
+								<td><input type="text" size = "2" maxlength = "2" name="bhour" value="" /></td>
+								<td>:</td>
+								<td><input type="text" size = "2" maxlength = "2" name="bminute" value="" /></td>
+
+								</tr>
+							</table>
+						</td>
+					</tr>
+					<tr><td width=40%><b>After </b><br>yyyy-mm-dd hr:min</td>
+						<td td width=60%>
+							<table>
+								<tr>
+								<td><input type="text" size = "4" maxlength = "4" name="ayear" value="" /></td>
+								<td>-</td>
+								<td><input type="text" size = "2" maxlength = "2" name="amonth" value="" /></td>
+								<td>-</td>
+								<td><input type="text" size = "2" maxlength = "2" name="adate" value="" /></td>
+								<td> </td>
+								<td><input type="text" size = "2" maxlength = "2" name="ahour" value="" /></td>
+								<td>:</td>
+								<td><input type="text" size = "2" maxlength = "2" name="aminute" value="" /></td>
+
+								</tr>
+							</table>
+						</td>
+					</tr>
+					<tr>
+					<td><b>Event</td>
+					<td> <select name = event>
+						<option value = "">ALL</option>
+						<option value = "0">IN</option>
+						<option value = "1">OUT</option>
+						<option value = "2">TEMP IN</option>
+						<option value = "3">TEMP OUT</option>
+						</select>
+					</td>
+					</tr>
+					<tr>
+					<td width=33%><b>User ID</b></td>
+					<td><input type = "text" name = ID value = ""></td>
+					</tr>
+					<tr>
+					<td><input type = "submit" value = "   Search   " align = left></td>
+					</tr>
+				</form>
+				</table>
+</td>
+</tr>
+</table>
+</font>
+<?finish:?>
+</body>
+</html>

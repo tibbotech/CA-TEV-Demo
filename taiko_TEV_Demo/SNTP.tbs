@@ -1,0 +1,531 @@
+'***********************************************************************************************************
+'			 SNTP LIBARAY (SIMPLE NETWORK TIME PROTOCOL) THIS CODE CAN OBTAIN TIME FROM SNTP SERVER
+'***********************************************************************************************************
+'IP for some of the Time Servers changes sometimes, so we suggest using DNS to obtain your Time Server IP.
+'When the Query is sent to the Time Server, Server returns the amount of seconds from 1st Jan, 1900 00:00:00
+'to now.  This is called 64bits Timestamp format
+'
+'***********************************************************************************************************
+include "global.tbh"
+
+public dim sntp_state as sntp_states
+public dim auto_sync_flag as no_yes
+public dim TZOffset_flag as no_yes
+
+dim hour_offset as byte	'hours of time zone offset
+dim min_offset as byte		'mins of time zone offset
+dim TimeZoneOffSet as string(2) 'the actually value (a list option) stored in the settings(EEPROM),
+dim auto_sync_hr, auto_sync_min as byte
+
+declare ui_clock_force_print as no_yes
+
+'------------------------------------------------------------------------------------------------------------
+sub TZOffset
+'read the TZ setting, and set hour_offset and min_offset according the TZ setting
+	setting_sg("TZ",0,TimeZoneOffSet,EN_STG_GET)
+	
+	select case TimeZoneOffSet
+	case 0:
+		hour_offset = 12
+		min_offset = 0
+	case 1:
+		hour_offset = 11
+		min_offset = 0
+	case 2: 
+		hour_offset = 10
+		min_offset = 0
+	case 3:
+		hour_offset = 9
+		min_offset = 0
+	case 4:
+		hour_offset = 8
+		min_offset = 0
+	case 5:
+		hour_offset = 7
+		min_offset = 0
+	case 6:
+		hour_offset = 6
+		min_offset = 0
+	case 7:
+		hour_offset = 5
+		min_offset = 0
+	case 8:
+		hour_offset = 4
+		min_offset = 30
+	case 9:
+		hour_offset = 4
+		min_offset = 0
+	case 10:
+		hour_offset = 3 
+		min_offset = 30
+	case 11:
+		hour_offset = 3
+		min_offset = 0
+	case 12:
+		hour_offset = 2
+		min_offset = 0
+	case 13:
+		hour_offset = 1
+		min_offset = 0
+	case 14:
+		hour_offset = 0
+		min_offset = 0
+	case 15:
+		hour_offset = 1
+		min_offset = 0
+	case 16:
+		hour_offset = 2
+		min_offset = 0
+	case 17:
+		hour_offset = 3
+		min_offset = 0
+	case 18:
+		hour_offset = 3
+		min_offset = 30
+	case 19:
+		hour_offset = 4
+		min_offset = 0
+	case 20:
+		hour_offset = 4 
+		min_offset = 30
+	case 21:
+		hour_offset = 5
+		min_offset = 0
+	case 22:
+		hour_offset = 5
+		min_offset = 30
+	case 23:
+		hour_offset = 5
+		min_offset = 45
+	case 24:
+		hour_offset = 6
+		min_offset = 0
+	case 25:
+		hour_offset = 6
+		min_offset = 30
+	case 26:
+		hour_offset = 7
+		min_offset = 0
+	case 27:
+		hour_offset = 8 
+		min_offset = 0
+	case 28:
+		hour_offset = 9
+		min_offset = 0
+	case 29:
+		hour_offset = 9
+		min_offset = 30
+	case 30:
+		hour_offset = 10
+		min_offset = 0
+	case 31:
+		hour_offset = 11	
+		min_offset = 0
+	case 32:
+		hour_offset = 12
+		min_offset = 0
+	case 33:
+		hour_offset = 13
+		min_offset = 0
+	end select
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+public sub InitSNTP
+'Initialize the sock for SNTP connection
+	dim s as string(5)	
+	sock.num = SOCK_SNTP
+	sock.txbuffrq(1)
+	sock.rxbuffrq(1)
+	sys.buffalloc
+	sock.protocol = PL_SOCK_PROTOCOL_UDP
+	sock.inconmode = PL_SOCK_INCONMODE_ANY_IP_ANY_PORT
+	sock.reconmode=PL_SOCK_RECONMODE_3
+	sntp_state = SNTP_IDLE
+	setting_sg("TC",0,s,EN_STG_GET)
+	auto_sync_hr = val(left(s,2))
+	auto_sync_min = val(right(s,2))
+	setting_sg("TF",0,s,EN_STG_GET)
+	if s = "1" then
+		auto_sync_flag = YES
+	else
+		auto_sync_flag = NO
+	end if	
+	TZOffset_flag = NO
+	TZOffset
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+public function ConnectToTimeServer(sTimeServerIP as string, sTimeServerPort as string) as byte
+'Connect to SNTP Time Server specified by sTimeServerIP, the port 123 is the default value for time server
+	dim timeout as word
+	sock.num = SOCK_SNTP
+	if sock.statesimple=PL_SSTS_EST then
+		SNTPQuery
+		sntp_state = SNTP_QUERYING
+	else
+		if sTimeServerPort = "" then
+			sock.targetport = 123
+		else
+			sock.targetport = val(sTimeServerPort)' 123 port is a common port for time server
+		end if
+		sock.targetip = sTimeServerIP 
+		sock.connect
+		sntp_state = SNTP_CONNECTING
+		timeout = sys.timercount
+	end if
+	while sock.statesimple <> PL_SSTS_EST
+		if sys.timercount > timeout + 6 then
+			sntp_state = SNTP_CONNECT_FAIL
+			exit function
+		end if	
+	wend
+	SNTPQuery
+end function
+
+'------------------------------------------------------------------------------------------------------------
+sub ConvertDates(byref wYears as word, 
+	byref wMonthes as word,		
+	byref wDays as word)
+	
+'Calculate how many days a year by the Leap Year Rule
+	dim i as byte 
+	dim bLeapYear as byte
+	dim wDaysOfAYear as word
+	dim wDaysOfAMonth as word
+	dim bDone as byte
+	bDone = 0
+	wYears = 1900				'the base year is 1900
+	wMonthes = 1				'the base month is January
+	wDaysOfAYear = 365
+	wDaysOfAMonth = 31
+	do while true
+		if wYears mod 4 = 0 then
+			bLeapYear = 1
+			wDaysOfAYear = 366
+		else
+			wDaysOfAYear = 365
+			bLeapYear = 0
+		end if
+		if wYears mod 100 = 0 then
+			wDaysOfAYear = 365
+			bLeapYear = 0
+		end if
+		if wYears mod 400 = 0 then
+			wDaysOfAYear = 366
+			bLeapYear = 1
+		end if
+		if wDays < wDaysOfAYear then exit do
+		wYears = wYears + 1
+		wDays = wDays - wDaysOfAYear
+	loop
+	
+	do while bDone = 0
+		select case wMonthes
+			case 1,3, 5, 7, 8, 10:
+			wDaysOfAMonth = 31
+			case 4, 6, 9, 11:
+			wDaysOfAMonth = 30
+			case 2:
+			if bLeapYear = 1 then
+				wDaysOfAMonth = 29
+			else
+				wDaysOfAMonth = 28	
+			end if
+		end select
+		if wDays > wDaysOfAMonth then
+			wMonthes = wMonthes + 1
+			wDays = wDays - wDaysOfAMonth
+		else
+			bDone = 1
+		end if
+	loop
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+sub ConvertToTime(wMSW as word,
+	wLSW as word,	
+	byref wDays as word,
+	byref wHours as word,
+	byref wMinus as word,
+	byref wSeconds as word)
+		
+'Take 4 bytes value from sock, which is the amount of seconds from 1st of Jan 1900 00:00:00 to now
+'convert this value into days,hours,mins,secs. 
+	dim wRemain as word
+	dim wFactor as word
+	dim wTemp as word
+	dim wTemp1 as word
+	dim wTemp2 as word
+	dim wTemp3 as word	
+	dim i as integer
+	dim j as integer
+
+	wRemain = 0
+	wFactor = 0
+	wDays = 0
+	wHours = 0
+	wMinus = 0
+	wSeconds = 0
+	wTemp1 = 0
+	wTemp2 = 0
+	wTemp3 = 0
+
+	wRemain = wMSW mod 24
+	wFactor = wMSW/24
+	wDays = wFactor * 18
+	wTemp1 = 0
+	 
+	for i = 1 to wFactor
+		wTemp1 = wTemp1 + 736
+		if wTemp1 > 3600 then 
+			wDays = wDays + 1
+			wTemp1 = wTemp1 - 3600
+		end if
+	next i 
+	for j = 1 to 18
+		wTemp2 = wTemp2 + wRemain
+		if wTemp2 > 24 then
+			wDays = wDays + 1
+			wTemp2 = wTemp2 -24
+		end if
+	next j
+	
+	'Put wTemp1 into Minutes and Seconds
+	wTemp3 = wRemain * 736
+	wTemp = wTemp1/60
+	wMinus = wTemp * 24
+	
+	'put wTemp2 into Minutes and Seconds
+	wSeconds = (wTemp1 mod 60) * 24
+	wMinus = wMinus + wTemp2 * 60
+	
+	'put wTemp3 into Minutes and Seconds
+	wMinus = wMinus + wTemp3/60
+	wSeconds = wSeconds + (wTemp3 mod 60) 
+	
+	'Add wLSW to Minutes and seconds
+	wMinus = wMinus + wLSW/60
+	wSeconds = wSeconds + (wLSW mod 60)
+	
+	'redistribute seconds to days.
+	wMinus = wMinus + wSeconds/60
+	wSeconds = wSeconds mod 60	
+	wHours = wMinus/60
+	
+	wMinus = wMinus mod 60	
+	wDays = wDays + wHours/24
+	wDays = wDays + 1 			'+1 because it counts start from 1st of January, (that is starting from 1)
+	wHours = wHours mod 24	
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+public function SNTPQuery as byte
+'send query for time base to the time server
+	dim s as string
+	dim i as byte
+	sock.num = SOCK_SNTP
+	s = chr(&h0b)
+	for i = 1 to 47
+		s = s + chr(&h0)
+	next i
+	sock.setdata(s)
+	sock.send
+end function
+
+'------------------------------------------------------------------------------------------------------------
+public sub GetSNTPTime(byref wYears as word, 
+	byref wMonthes as word,		
+	byref wDays as word,
+	byref wHours as word,
+	byref wMinus as word,
+	byref wSeconds as word)
+'extract the time from the rx buff
+	sock.num = SOCK_SNTP
+	dim wMSW as word
+	dim wLSW as word
+	dim b1 as byte
+	dim b2 as byte
+	dim b3 as byte
+	dim b4 as byte
+	dim s as string
+	s = sock.getdata(255)
+	b1 = asc(mid(s,41,1)) 'the time is in a 4 byte format, (64bits Timestamp format)
+	b2 = asc(mid(s,42,1))
+	b3 = asc(mid(s,43,1))
+	b4 = asc(mid(s,44,1))
+	wMSW = b1 * 256 + b2
+	wLSW = b3 * 256 + b4
+	ConvertToTime(wMSW, wLSW,wDays,wHours,wMinus,wSeconds)	'call ConvertToTime, to convert the 64bits timestamp into days, hours, mins,and secs
+	ConvertDates(wYears,wMonthes,wDays)		'call convertDates to calculate the years, and monthes following the leap year rule.
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+public sub SNTPAutoSync
+'A timer subroutin. It should be called periodically (put it in on_sys_timer event), it would check if the current time is the time to connect to the time server and syncronize the time.
+	dim wMinutes as word
+	dim sec as byte
+	if auto_sync_flag = NO then exit sub
+	rtc.getdata("",wMinutes,sec)
+	if hours(wMinutes) = auto_sync_hr and minutes(wMinutes) = auto_sync_min and sec = 0 then 
+		proc_ser_cmd(chr(STX)+"K"+chr(CR))
+		ui_clock_force_print = YES
+	end if
+end sub
+
+'--------------------------------------------------------------------
+public function clock_set_time(sYear as string(4), sMonth as string(2), sDate as string(2), sHour as string(2), sMin as string(2), sSec as string(2), UTC_time as no_yes) as boolean
+'Set the rtc value according to the function parameters
+	dim bSysSec,bYear,bMonth,bDate,bHour,bMin as byte
+	dim wSysDaycount, wSysMincount as word
+	GetRealTime(wSysDaycount,wSysMincount,bSysSec)
+
+	if (len(sYear)+len(sMonth)+len(sDate)) > 0 then
+		if val(sYear) < 2000 or val(sYear) > 2099 then
+			goto fail
+		else
+			bYear = val(sYear)-2000
+		end if
+		bMonth = val(sMonth)
+		bDate = val(sDate)
+		wSysDaycount = daycount(bYear,bMonth,bDate)	
+	end if
+	if (len(sHour)+len(sMin)) > 0 then
+		bHour = val(sHour)
+		bMin = val(sMin)
+		wSysmincount = mincount(bHour,bMin)
+	end if	
+	if len(sSec) > 0 then
+		bSysSec = val(sSec)
+	end if
+	if wSysDaycount = 65535 or wSysmincount = 65535 or bSysSec > 59 then
+fail:		
+		clock_set_time = false
+		exit function
+	else
+		if UTC_time = YES then
+			rtc.setdata(wSysDaycount,wSysMincount,bSysSec)
+		else
+			SetRealTime(wSysDaycount,wSysMincount,bSysSec)
+		end if
+		clock_set_time = true
+	end if
+end function
+
+'---------------------------------------------------------------------------------------
+public sub date_time_str(byref date_str as string(14), byref hr_str as string(2),byref min_str as string(2), byref sec_str as string(2),byref wday_str as string(3))
+'Read from the rtc of the system, and convert the raw rtc value into strings of date, hour, minute and second.
+	dim wSysDaycount, wSysMincount as word
+	dim sYear, sMonth, sDate, sHour, sMin, sSec as string(4)
+	dim bSysSec as byte
+	dim wd as pl_days_of_week 
+	GetRealTime(wSysDaycount, wSysMincount,bSysSec)
+
+	sYear = str(year(wSysdaycount) + 2000)
+	sMonth = str(month(wSysdaycount))
+	sDate = str(date(wSysdaycount))
+	sHour = str(hours(wSysmincount))
+	sMin = str(minutes(wSysmincount))
+	sSec = str(bSysSec)
+
+	if len(sHour) < 2 then 
+		sHour = "0"+sHour 
+	end if
+	if len(sMin) < 2 then 
+		sMin = "0"+sMin 
+	end if
+	if len(sSec) < 2 then 
+		sSec = "0"+sSec 
+	end if
+	if len(sDate) < 2 then 
+		sDate = "0"+sDate 
+	end if
+	if len(sMonth) < 2 then 
+		sMonth = "0"+sMonth 
+	end if
+	wd = weekday(wSysdaycount)
+		select case wd
+		case PL_DOW_MONDAY:
+			wday_str = "MON"
+		case PL_DOW_TUESDAY:
+			wday_str = "TUE"
+		case PL_DOW_WEDNESDAY:
+			wday_str = "WED"
+		case PL_DOW_THURSDAY:
+			wday_str = "THR"
+		case PL_DOW_FRIDAY:
+			wday_str = "FRI"
+		case PL_DOW_SATURDAY:
+			wday_str = "SAT"
+		case PL_DOW_SUNDAY:
+			wday_str = "SUN"
+	end select
+	date_str=sDate+"/"+sMonth+"/"+sYear
+	hr_str=sHour
+	min_str = sMin
+	sec_str = sSec
+end sub
+
+'------------------------------------------------------------------------------------------------------------
+public sub GetRealTime(byref wRTCDays as word, byref wRTCMinutes as word, byref wRTCSecs as byte) 
+	dim wTemp, wTemp1 as word
+	rtc.getdata(wRTCDays,wRTCMinutes,wRTCSecs)
+	
+	wTemp = (hour_offset * 60) + min_offset
+	
+	if TZOffset_flag = YES then
+		TZOffset
+		TZOffset_flag = NO
+	end if
+	
+	if val(TimeZoneOffSet) < 14 then
+		if wRTCMinutes < wTemp then
+			wRTCDays = wRTCDays - 1 
+			wTemp1 = 1439 - wTemp
+			wRTCMinutes = wRTCMinutes + wTemp1 + 1
+		else
+ 			wRTCMinutes = wRTCMinutes-wTemp
+ 		end if	
+	end if
+	if val(TimeZoneOffSet) > 14 then
+		wTemp1 = 1439 - wTemp
+		if wRTCMinutes > wTemp1 then
+			wRTCDays = wRTCDays + 1
+			wRTCMinutes = wRTCMinutes - wTemp1 - 1
+		else 
+			wRTCMinutes = wRTCMinutes + wTemp
+		end if 
+	end if	
+	
+end sub
+'------------------------------------------------------------------------------------------------------------
+public sub SetRealTime(byref wRTCDays as word, byref wRTCMinutes as word, byref wRTCSecs as byte) 
+'The function convert the time back to the UTC time (remove the time zone offset) and set it back RTC
+	dim wTemp, wTemp1 as word
+
+	wTemp = (hour_offset * 60) + min_offset
+	
+	if TZOffset_flag = YES then
+		TZOffset
+		TZOffset_flag = NO
+	end if
+	if val(TimeZoneOffSet) < 14 then
+		wTemp1 = 1439 - wTemp
+		if wRTCMinutes > wTemp1 then
+			wRTCDays = wRTCDays + 1
+			wRTCMinutes = wRTCMinutes - wTemp1 - 1
+		else 
+			wRTCMinutes = wRTCMinutes + wTemp
+		end if 
+	end if
+	if val(TimeZoneOffSet) > 14 then
+		if wRTCMinutes < wTemp then
+			wRTCDays = wRTCDays - 1 
+			wTemp1 = 1439 - wTemp
+			wRTCMinutes = wRTCMinutes + wTemp1 + 1
+		else
+ 			wRTCMinutes = wRTCMinutes-wTemp
+ 		end if
+	end if
+	rtc.setdata(wRTCDays,wRTCMinutes,wRTCSecs)
+end sub

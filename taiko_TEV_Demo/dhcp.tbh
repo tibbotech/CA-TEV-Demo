@@ -1,0 +1,6 @@
+'=============================================================
+'	DHCP.TBS
+'=============================================================
+
+const DHCP_MAX_RETRIES=5 'This is how many times we will try to do DHCP
+declare function dhcp_obtain(byref obtained_ip as string, byref obtained_gateway as string, byref obtained_netmask as string, byref obtained_lease_time as word, device_name as string(32)) as ok_ng

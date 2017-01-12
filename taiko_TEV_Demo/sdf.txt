@@ -1,0 +1,10 @@
+I=$NET;D=General;T=GROUP
+I=ON;D=Owner name;T=STRING;C=EDIT;MAXLEN=8;F=R*
+I=DN;D=Device name;T=STRING;C=EDIT;MAXLEN=8;F=R*
+I=DH;D=DHCP;T=INT;C=STATIC;O=0- Disabled/0/1- Enabled/1;F=R
+I=IP;D=IP-address;T=STRING;C=IPCTRL;S=DH==1?"a":"e";F=R*
+I=GI;D=Gateway IP-address;T=STRING;C=IPCTRL
+I=NM;D=Subnet mask;T=STRING;C=IPCTRL
+I=TC;D=Auto Sync Time;T=STRING;C=EDIT;MAXLEN=5;F=R*
+I=TS;D=Time Server;T=STRING;C=IPCTRL;S=DH==1?"a":"e";F=R*
+I=PW;D=Network Password;T=STRING;C=EDIT;MAXLEN=8;F=R*

@@ -1,0 +1,131 @@
+'***********************************************************************************************************
+'			HTML SESSION LOGIN AND MAINTENANCE
+'***********************************************************************************************************
+
+include "global.tbh"
+public dim login_session as string(SESSION_LEN)		
+public dim html_login_state as login_state
+
+dim login_counter as word
+
+'-------------------------------------------------------------
+public sub html_print_session 
+'Get the session number from URL and add it to the html page as an input, so the session id could be passed on to other pages.
+	dim s as string
+	s = get_http_argument(sock.httprqstring,"session=")
+	sock_setsend("<input type = 'hidden' name = 'session' value = '"+s+"'>")
+end sub
+
+'-------------------------------------------------------------
+public sub login_verify
+'Check if there are currently logged user by varifing the session ID.
+	dim sSessionID as string(8)
+	sSessionID = get_http_argument(sock.httprqstring,"session=")
+
+	if sSessionID <> login_session then
+		html_login_state = INVALID_SESSION
+	else
+		if login_counter > LOGIN_TIMEOUT then
+			html_login_state = EXPIRED
+			login_session = ""
+			login_counter = 0
+		else
+			html_login_state = LOGIN
+			login_counter = 0
+		end if	
+	end if
+	
+	'if html_login_state is not LOGIN, or counter is expired, the piece of html is add to the page,
+	'it will call the javascript function "IndexPage()" and this function redirects page to index.html
+	
+	if html_login_state <> LOGIN or login_counter > LOGIN_TIMEOUT or login_session = "" then
+		sock_setsend("onload = IndexPage()") 		
+	else
+		login_counter = 0
+	end if
+end sub
+
+'-------------------------------------------------------------
+public sub password_verify
+'Check the password.  If the password is correct, proceed to the next page (home.html), otherwise, redirect back to index page
+	dim pw as string(6)
+	dim entered_pw as string(6)
+	dim sSessionID, temp as string(SESSION_LEN)
+	dim stg_status as en_stg_status
+	dim i as byte
+	entered_pw = get_http_argument(sock.httprqstring,"pw=")
+	stg_status = setting_sg("PW",0,pw,EN_STG_GET)
+	sSessionID = ""
+	
+	'if there is no stored password, the password = admin by default, 
+	'after user stored their own password, "admin" does not work any more
+	
+	if stg_status <> EN_STG_STATUS_OK or pw = "" then pw = "admin"		
+																		
+	if login_counter > LOGIN_TIMEOUT then
+		html_login_state = EXPIRED
+		login_session = ""
+		login_counter = 0		
+	end if
+	
+	'here, the function checks an http argument call "logout" if it is equal to yes, meaning instead of 
+	'login, the user is logging out.
+	
+	if get_http_argument(sock.httprqstring,"logout=") = "yes" then
+		html_login_state = LOGOUT
+		login_session= ""
+		login_counter=0
+	goto finish
+	end if
+		
+	if entered_pw = pw then
+	'generating session id
+		temp = random(SESSION_LEN)
+		for i = 0 to SESSION_LEN-1
+			sSessionID = sSessionID + str(asc(mid(temp,i,1))/9)
+		next i 
+	'generated session id is only stored, if login_session is empty, if it is not empty, login fails.
+		if login_session = "" then
+			login_session = sSessionID
+			html_login_state = LOGIN
+			login_counter = 0	
+		else
+			html_login_state = INVALID_SESSION
+		end if
+		goto finish
+	end if
+	if entered_pw <> pw and entered_pw <> "" then
+		html_login_state = INVALID_LOGIN
+		goto finish
+	end if
+	if entered_pw = "" and html_login_state <> EXPIRED then 
+		html_login_state = INIT 
+		goto finish
+	end if	
+	if entered_pw = "" and html_login_state = EXPIRED then
+		goto finish
+	end if
+finish:
+	if html_login_state <> LOGIN then
+		sock_setsend("<meta http-equiv='Refresh' content = '0;url=index.html' target = _top>")  'redirect back to index page
+	else
+		sock_setsend("<meta http-equiv='Refresh' content = '0;url=home.html?session="+sSessionID+"'>")   'proceed to the setup page.
+	end if
+end sub
+
+'-------------------------------------------------------------
+public sub print_login_state
+'check current login status, and print the error msg on the index.html accordingly
+	sock_setsend("</br></br></br></br>")
+	select case html_login_state
+		case LOGOUT:
+			sock_setsend("<font color = "+FONT_COLOR_1+"><b></b>Logged out!!</font>")
+		case INVALID_LOGIN:
+			sock_setsend("<font color = "+FONT_COLOR_1+"><b></b>Invalid password!! Please try again.</font>")
+		case EXPIRED:
+			sock_setsend("<font color = "+FONT_COLOR_1+"><b></b>Login session expired, please log in again!!</font>")
+		case INVALID_SESSION:
+			sock_setsend("<font color = "+FONT_COLOR_1+"><b></b>Invalid session ID, or other user currently logged in, please log in again!!</font>")
+	end select
+end sub
+

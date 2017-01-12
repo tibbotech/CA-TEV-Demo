@@ -1,0 +1,204 @@
+'********************************************************************************
+'	APPLICATION STARTUP
+'********************************************************************************
+
+include "global.tbh"
+
+declare on_kp_event_dest as on_kp_event_destinations
+declare on_sys_timer_event_dest as on_sys_timer_event_destinations
+declare on_reader_event_dest as on_reader_event_destinations
+
+dim dhcp_lease_time as word 'this is a counter-down for remaining lease time
+
+declare error_mode as no_yes
+declare bcast_sel as no_yes
+declare auto_sync_flag as no_yes
+
+'=============================================================
+public sub boot
+	dim f as byte
+	dim x as pl_redir
+	dim ip_ok as boolean
+	dim dhcp_ip, dhcp_gateway, dhcp_netmask as string(16)
+	dim dhcp_result as ok_ng
+	dim init_flag as string(1)
+	
+	'initialize all libraries
+	settings_init
+	net_cmd_init
+	ser_mode_init
+	event_log_init
+	reader_init
+	
+		'---------- Internet Time Sever Sync ----------	
+	InitSNTP
+	
+		'---------- DHCP ----------- 	
+
+	bcast_sel=NO
+
+
+	'It is a good practice to indicate that we are now in DHCP
+	pat.play("~G---------------",PL_PAT_CANINT)
+	
+	ip_ok = false
+
+	if setting_get("DH",0) = "1" then ' DHCP enabled?
+		'Start by obtaining data from DHCP server.
+		dhcp_lease_time=0 'we clear this first
+		dhcp_result=dhcp_obtain(dhcp_ip, dhcp_gateway, dhcp_netmask, dhcp_lease_time, "agent1")
+
+	'following code make sure all the socket before changing network properties
+		sock.inconenabledmaster=NO 
+		for f=0 to sock.numofsock-1
+			sock.num=f
+			if sock.statesimple<>PL_SSTS_CLOSED then
+				sock.discard
+				while sock.statesimple<>PL_SSTS_CLOSED
+				wend
+			end if
+		next f
+		
+		if dhcp_result=OK then
+			'DHCP session was successful
+			net.ip=dhcp_ip
+			net.gatewayip=dhcp_gateway
+			net.netmask=dhcp_netmask
+			
+			setting_sg("IP",0,dhcp_ip,EN_STG_SET)
+			setting_sg("GI",0,dhcp_gateway,EN_STG_SET)
+			setting_sg("NM",0,dhcp_netmask,EN_STG_SET)
+			declare_ip_obtained
+			ip_ok = true
+		else
+			goto get_setting 
+		end if
+	else
+	
+	
+get_setting:
+		set_net_ip() 'correct way of setting net.ip!
+		net.gatewayip = setting_get("GI",0)
+		net.netmask = setting_get("NM",0)
+		
+		'declare_ip_set
+	end if
+	sock.inconenabledmaster=YES
+	
+
+	'initialize run-time vars
+	error_mode=NO
+
+	write_x_flag(EN_X_FLAGS_IP,"M")
+
+	'--- Allocate Buffer Space ---
+	
+	'UDP65535
+	sock.num=SOCK_UDP
+	sock.txbuffrq(1)
+	sock.rxbuffrq(1)
+	
+
+	'TELNET/HTTP
+	for f=SOCK_HTTP to SOCK_HTTP+NUM_HTTP_PORTS-1
+		sock.num=f
+		sock.txbuffrq(1)
+		sock.rxbuffrq(1)
+		sock.varbuffrq(1)
+	next f
+	
+	sys.buffalloc
+	
+
+	'UDP65535
+	sock.num=SOCK_UDP
+	sock.protocol=PL_SOCK_PROTOCOL_UDP
+	sock.localportlist="65535"
+	sock.inconmode=PL_SOCK_INCONMODE_ANY_IP_ANY_PORT
+	sock.reconmode=PL_SOCK_RECONMODE_3
+	sock.acceptbcast=YES
+	
+	'TELNET/HTTP
+	for f=SOCK_HTTP to SOCK_HTTP+NUM_HTTP_PORTS-1
+		sock.num=f
+		sock.protocol=PL_SOCK_PROTOCOL_TCP
+		sock.localportlist="23"
+		sock.httpportlist="80"
+		sock.connectiontout=600
+		sock.inconmode=PL_SOCK_INCONMODE_ANY_IP_ANY_PORT
+		sock.reconmode= PL_SOCK_RECONMODE_0
+	next f
+	
+
+	'----- SYNC TIME	------
+	if auto_sync_flag = YES then proc_ser_cmd(chr(STX)+"K"+chr(CR))	'sync at system reboot
+
+
+	'----- SETUP RUNTIME VARIABLES -----
+	
+	on_kp_event_dest=ON_KP_EVENT_DEST_NONE
+	on_sys_timer_event_dest=ON_SYS_TIMER_EVENT_DEST_NONE
+
+
+	'----- SETUP BUZZER -----
+	
+	io.num=PL_IO_NUM_45_CO
+	io.enabled=YES
+	
+	
+	'----- SETUP KEYBOARD -----
+	
+	io.num=PL_IO_NUM_24
+	io.enabled=YES
+
+	io.num=PL_IO_NUM_25
+	io.enabled=YES
+
+	io.num=PL_IO_NUM_26
+	io.enabled=YES
+
+	io.num=PL_IO_NUM_27
+	io.enabled=YES
+	kp.enabled = NO
+	kp.scanlinesmapping="24,25,26,27"		
+	kp.returnlinesmapping="28,29,30,31"
+	kp.longpressdelay = 120
+	kp.enabled=YES
+	
+	'----- SETUP LCD AND RELATED STUFF -----
+
+	lcd_init
+	lcd_print_logo
+
+	init_flag = setting_get("IF",0)
+	init_flag = "0"
+	if init_flag = "0" then
+clock:
+		pat.play("B-B-B-",PL_PAT_CANINT)
+	
+		'lcd.print("Hello World",1,1)
+		
+		dim xxx as word
+		
+		for xxx = 0 to 30000
+		
+		next xxx
+		beep.divider = 20000
+		beep.play("BBBB-B-B",PL_BEEP_NOINT)			
+		ui_clock(UI_CLOCK_X,UI_CLOCK_Y,yes)
+		beep.divider = 20000
+		beep.play("BBBB",PL_BEEP_NOINT)
+		ui_menu(1,1,lcd.width,lcd.height-15,"","menu_descr.txt",LCD_VERSPACE,1,0)	
+		goto clock
+	else
+		lcd_clear(0,0,lcd.width,lcd.height)
+		on_reader_event_dest = ON_READER_EVENT_DEST_INIT
+		lcd_print_msg(MSCARD_ENROLL_NOTE,3,5,lcd.width-6,lcd.height-10,yes)
+	end if	
+
+
+	'-----------------
+
+	
+
+end sub

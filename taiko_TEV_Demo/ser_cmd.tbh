@@ -1,0 +1,12 @@
+'=============================================================
+'	SER_CMD.TBS
+'=============================================================
+
+
+'---------------- serial command ----------------
+CONST SER_COM_NUM = 0
+
+declare sub ser_mode_init
+declare function proc_ser_cmd (byref s as string(20)) as string(80)
+
+

@@ -1,0 +1,20 @@
+'=============================================================
+'		NET_CMD.TBS
+'=============================================================
+const LOGIN_TOUT_CONST=600
+const MAX_NUM_SDF_LINES=30
+
+enum net_cmd_proto_options
+	CMD_UDP,
+	CMD_TELNET,
+	CMD_INBAND
+end enum
+
+declare sub net_cmd_1sec_timer_proc
+declare sub net_cmd_init
+declare sub last_udp_cmd_port_change(new_port as word)
+declare sub net_cmd_proc(byref s as string(140), cmd_transport as net_cmd_proto_options, cmd_bcast as no_yes, byref cmd_source_ip as string, cmd_source_port as word, cmd_sock as byte, error_mode as no_yes, net_login_allowed as no_yes)
+declare sub set_net_ip
+declare sub logout_notification(sock_num as byte)
+declare sub sock_closed_check_net_login(sock_num as byte)
+

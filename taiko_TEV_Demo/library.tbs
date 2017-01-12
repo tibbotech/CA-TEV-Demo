@@ -1,0 +1,91 @@
+'***********************************************************************************************************
+'			USEFUL STUFF THAT CAN BE RE-USED IN OTHER PROJECTS
+'***********************************************************************************************************
+
+include "global.tbh"  
+
+
+'--------------------------------------------------------------------
+public sub key_led_reset
+'Turn off the all leds
+	io.num = 24
+	io.state = HIGH    
+	io.num = 25
+	io.state = HIGH
+	io.num = 26
+	io.state = HIGH
+	io.num = 27
+	io.state = HIGH	
+end sub
+
+'--------------------------------------------------------------------
+public sub key_led_pressed(key_code as byte)
+'Turn on the led specify by key_code
+	key_led_reset
+	select case key_code
+		case keycodeF1:
+			io.num = 24
+			io.state = LOW
+		case keycodeF2:
+			io.num = 25
+			io.state = LOW
+		case keycodeF3:
+			io.num = 26
+			io.state = LOW
+		case keycodeF4:
+			io.num = 27
+			io.state = LOW
+	end select	
+end sub
+'-------------------------------------------------------------------
+public sub key_led_released(key_code as byte)
+'Turn off the led specify by the key_code
+	select case key_code
+		case keycodeF1:
+			io.num = 24
+			io.state = HIGH
+		case keycodeF2:
+			io.num = 25
+			io.state = HIGH
+		case keycodeF3:
+			io.num = 26
+			io.state = HIGH
+		case keycodeF4:
+			io.num = 27
+			io.state = HIGH
+	end select
+end sub
+
+
+
+'--------------------------------------------------------------------
+public function ip_val_chker (byref str_val as string) as boolean
+'Check if the ip is valid
+	dim s as string(4)
+	dim isVaild as boolean
+	isVaild = true
+	s = ddval(str_val)
+	if asc(left(s,1)) > 223 then
+		s = right(s,3)
+		s = chr(223) + s
+		isVaild = false
+	end if
+	if asc(right(s,1)) = 255 then
+		s = left(s,3)
+		s  = s +chr(1)
+		isVaild = false
+	end if
+	if asc(right(s,1)) = 0 then
+		s = left(s,3)
+		s = s+chr(1)
+		isVaild = false
+	end if
+	if asc(left(s,1)) = 0 then
+		s = right(s,3)
+		s = chr(1)+ s
+		isVaild = false
+	end if
+	str_val = ddstr(s)
+	ip_val_chker = isVaild
+end function
+

@@ -1,0 +1,20 @@
+
+'=============================================================
+'	HTML.TBS
+'=============================================================
+CONST FONT_COLOR_1 = "#C80000"
+CONST FONT_COLOR_2 = "#00C800"
+CONST FONT_COLOR_3 = "#FF0000"
+
+CONST LOG_ITEM_PER_PAGE = 10
+
+
+declare sub print_event_table
+declare sub next_page
+declare sub prev_page
+declare sub top_page
+declare sub bottom_page
+declare function get_http_argument(byref http_req_string as string, byref argument as string) as string
+declare sub sock_setsend(byref s as string)
+declare sub html_print_setting(html_descr_file as string(30))
+declare sub html_save_setting

@@ -1,0 +1,99 @@
+'*************************************************************************************************************************
+'           Message Box
+'	This is a message box libaray.  It popup a message box on the LCD screen, exit when one key is pressed, if the keycode of the key
+'	matches on of the keycode that is defined in the keycode_str, the message box closes, and the function returns the keycode
+'	of the key that was pressed.  In the case of time out or error, 255 is returned
+'	
+'*************************************************************************************************************************
+
+include "global.tbh"
+declare on_kp_event_dest as on_kp_event_destinations
+declare on_sys_timer_event_dest as on_sys_timer_event_destinations
+
+dim mb_timeout_ctr as byte
+dim mb_keycode as byte
+
+'---------------------------------------------------------------
+public function ui_msg_box(
+	byref msg as string(60), 	'message to be displayed in the Message Box
+	x as byte, 					'x coordination
+	y as byte, 					'y coordination
+	w as byte, 					'width of the msgbox
+	h as byte, 					'height of the msgbox
+	align as pl_lcd_text_alignment, 	'alignment of the text in the msgbox
+	byref keycode_str as string(20),	'this string contains the characters which ASCII is correspond to the keycode of keys on the keypad that msgbox responds to 
+	bolder as no_yes, 					'if the msgbox is wrap with a visible bolder line
+	timeout as byte						'if no respond from the keypad within the time defined by "timeout", exit the msgbox and return to the previous screen. If timeout = 0, no time out applies
+	) as byte
+	
+	dim backup_on_kp_event_dest as on_kp_event_destinations
+	dim backup_on_sys_timer_event_dest as on_sys_timer_event_destinations
+	mb_keycode = 255			'mb_kycode is 255 by default, if a key is pressed, it will be changed to the key code of the pressed key
+	mb_timeout_ctr = timeout
+	
+	'back up the current kp event, and sys timer event
+	backup_on_kp_event_dest=on_kp_event_dest
+	backup_on_sys_timer_event_dest = on_sys_timer_event_dest
+	
+	'redirect all kp event and sys timer event to msg box
+	on_kp_event_dest= ON_KP_EVENT_DEST_MSG_BOX
+	on_sys_timer_event_dest = ON_SYS_TIMER_EVENT_DEST_MSG_BOX
+	if msg = "" then 
+		ui_msg_box = 255
+		exit function
+	end if
+	romfile.open(LCD_STD_FONT)
+	lcd.setfont(romfile.offset)	
+	lcd.textverticalspacing = 1
+	lcd_clear(x,y,w,h)
+	if bolder = YES then lcd.rectangle(x+1,y+1,x+w-2,y+h-2)
+	lcd.textalignment = align
+	lcd.printaligned(msg,x+3,y+3,w-6,h-6)
+
+wait:
+	doevents
+	if mb_keycode<>255 then	 'key is pressed, return pressed key code.
+		goto key_pressed
+	end if
+	if timeout=0 then
+		goto wait
+	else
+		if mb_timeout_ctr=0 then
+			ui_msg_box = 255
+			on_kp_event_dest=backup_on_kp_event_dest
+			on_sys_timer_event_dest=backup_on_sys_timer_event_dest
+			exit function
+key_pressed:		
+			if mb_keycode <> 255 then
+				if keycode_str <> "" AND instr(1,keycode_str,chr(mb_keycode),1)=0 then goto wait 
+				ui_msg_box = mb_keycode
+				on_kp_event_dest=backup_on_kp_event_dest
+				on_sys_timer_event_dest=backup_on_sys_timer_event_dest				
+				exit function
+			end if
+		end if
+		goto wait
+	end if	
+end function
+
+'---------------------------------------------------------------
+public sub ui_msg_box_key_proc(key_event as pl_kp_event_codes, key_code as byte) 
+'The keypad process for ui_msg_box module
+	select case key_event
+	case PL_KP_EVENT_PRESSED:
+		beep.divider = 20000
+		beep.play("B-",PL_BEEP_CANINT)
+		key_led_pressed(key_code)	
+		mb_keycode = key_code
+	case PL_KP_EVENT_RELEASED:
+		key_led_reset
+	end select
+end sub
+
+'---------------------------------------------------------------
+public sub ui_msg_box_timer_proc
+'The timer process for ui_msg_box module
+	if mb_timeout_ctr>0 then
+		mb_timeout_ctr=mb_timeout_ctr-1
+	end if
+end sub

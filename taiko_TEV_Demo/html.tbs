@@ -1,0 +1,542 @@
+'***********************************************************************************************************
+'			PROCEDURES INVOKED FROM HTML PAGES
+'***********************************************************************************************************
+
+include "global.tbh"
+
+
+dim log_counter, last_found_index as byte
+dim html_log_head, html_log_tail as word
+dim it_was_save, is_next_page, is_prev_page as no_yes
+dim html_setting_status as en_stg_status(MAX_NUM_SETTINGS)
+
+declare ui_clock_force_print as no_yes
+declare wEventcount as word
+declare mem_usage as byte
+declare id_y as word
+declare TZOffset_flag as no_yes
+
+
+'-------------------------------------------------------------
+public sub next_page
+'print the hyperlink for the "Next" page on the event_query.html
+	if is_next_page = YES then
+		dim s as string
+		dim pos1, pos2 as byte
+		s = sock.httprqstring
+		if s = "" then
+			s = "?page="+"next"
+		else
+			pos1 = instr(1,s,"page",1)
+			pos2 = instr(1,s,"HTTP",1)
+			if pos1 = 0 then
+				s = left(s,pos2-2) 
+				s = "?" + s + "&page=" + "next"
+			else 
+				s = left(s,pos1-2)
+				s = "?" + s + "&page=" + "next"
+			end if
+		end if
+		sock_setsend("<a href = event_table.html" + s + " target = table>  Next</a>")	
+	end if
+end sub
+
+'-------------------------------------------------------------
+public sub prev_page
+'print the hyperlink for the "Previous" page on the event_query.html
+	if is_prev_page = YES then
+		dim s as string
+		dim pos1, pos2 as byte
+		
+		s = sock.httprqstring
+		if s = "" then
+			s = "?page="+"prev"
+		else
+			pos1 = instr(1,s,"page",1)
+			pos2 = instr(1,s,"HTTP",1)
+			if pos1 = 0 then
+				s = left(s,pos2-2)
+				s = "?" + s + "&page=" + "prev" 
+			else
+				s = left(s,pos1-2)
+				s = "?" + s + "&page=" + "prev"
+			end if
+		end if
+		sock_setsend("<a href = event_table.html" + s + " target = table>Previous  </a>")
+	end if
+end sub
+
+'-------------------------------------------------------------
+public sub top_page
+'print the hyperlink for the "Top" page on the event_query.html
+	dim s as string
+	dim pos1, pos2 as byte
+	s = sock.httprqstring
+	if s = "" then
+		s = "?page="+"top"
+	else
+		pos1 = instr(1,s,"page",1)
+		pos2 = instr(1,s,"HTTP",1)
+		if pos1 = 0 then
+			s = left(s,pos2-2)
+			s = "?" + s + "&page=" + "top" 
+		else
+			s = left(s,pos1-2)
+			s = "?" + s + "&page=" + "top"
+
+		end if
+	end if
+	sock_setsend("<a href = event_table.html" + s + " target = table>Top  </a>")
+end sub
+
+'-------------------------------------------------------------
+public sub bottom_page
+'print the hyperlink for the "Bottom" page on the event_query.html
+	dim s as string
+	dim pos1, pos2 as byte
+	
+	s = sock.httprqstring
+	if s = "" then
+		s = "?page="+"bottom"
+	else
+		pos1 = instr(1,s,"page",1)
+		pos2 = instr(1,s,"HTTP",1)
+		if pos1 = 0 then
+			s = left(s,pos2-2)
+			s = "?" + s + "&page=" + "bottom" 
+		else
+			s = left(s,pos1-2)
+			s = "?" + s + "&page=" + "bottom"
+		end if
+	end if
+	sock_setsend("<a href = event_table.html" + s + " target = table>Bottom  </a>")	
+end sub
+
+
+'-------------------------------------------------------------
+public function get_http_argument(byref http_req_string as string, byref argument as string) as string
+'Get one specific argument from the http request string.
+'For example If http_req_string = http://index.html&p1=abc&p2=def by calling this function, 
+'get_http_argument(sock.httprqstring,"p1="), the function returns "abc"
+	dim x, y as byte
+	x = instr(1, http_req_string, argument,1)
+	if (x = 0) then
+		get_http_argument = ""
+		exit function
+	end if
+	x = x + len(argument)
+	y = instr(x, http_req_string, "&",1)
+	if (y = 0) then
+		y = instr(x, http_req_string, " ",1)
+		if (y = 0) then
+			y = len(argument)
+		end if
+	end if
+	get_http_argument = mid(http_req_string, x, y - x)
+end function
+'-------------------------------------------------------------
+public sub html_print_setting(html_descr_file as string(30))
+'Read the html_descr_file and print the settings that is in the file. 
+	dim i,b as word
+	dim setting_val, setting_str as string(50)
+	dim setting_name, setting_input_len as string(2)
+	dim setting_type, setting_input_type as string(1)
+	dim s,setting_option as string
+	dim pos1, pos2, stg_num as byte
+	dim date_str as string(14)
+	dim hr_str as string(2)
+	dim min_str as string(2)
+
+	romfile.open(html_descr_file)
+	i=romfile.find(romfile.pointer,">>",1)
+	b = 2
+	while i<>0
+		'doevents
+		setting_input_type = ""
+		setting_type = ""
+		setting_name = ""
+		setting_val = ""
+		setting_str = ""
+		setting_option = ""
+			romfile.pointer=i+2
+			do												'get the setting name (the setting name that is used in the settings.txt)
+				i=romfile.find(romfile.pointer,chr(TAB),1) 
+				if i=0 then exit sub
+				s=romfile.getdata(i-romfile.pointer)
+				romfile.pointer=i+1
+			loop while s=""
+			setting_name = s 		
+			do												'get the setting string (the string that is printed on the html page as setting name)
+				i=romfile.find(romfile.pointer,chr(TAB),1) 
+				if i=0 then exit sub
+				s=romfile.getdata(i-romfile.pointer)
+				romfile.pointer=i+1
+			loop while s="" 
+			setting_str = s		
+			do												'get the setting data, setting_input_type, I:input box, L:list box
+				i=romfile.find(romfile.pointer,chr(TAB),1) 
+				if i=0 then exit sub
+				s=romfile.getdata(i-romfile.pointer)
+				romfile.pointer=i+1
+			loop while s=""
+			pos1 = instr(1,s,CHR(44),1)
+			pos2 = instr(1,s,CHR(44),2)
+			setting_type = left(s,1)
+			setting_input_type = mid(s,pos1+1,1)			'if input type is list box(L), then setting data also contain the options for the list box
+			if setting_input_type = "L" then
+				setting_option = mid(s,pos2+1,len(s)-pos2)
+			end if											'if input type is input box(I), then setting data also contain the maximum input length
+			if setting_input_type = "I" then
+				setting_input_len = mid(s,pos2+1,len(s)-pos2)
+			end if
+			i=romfile.find(romfile.pointer,">>",1)	
+		
+		sock_setsend("<tr><td width=33%>")						'using the setting name to find the actual values
+		stg_num=setting_find(setting_name)
+		stg_num = stg_num-1
+		select case setting_name
+		case "TD":
+			date_time_str(date_str,"","","","")
+			setting_val = date_str		
+		case "TT":
+			date_time_str("",hr_str,min_str,"","")
+			setting_val =  hr_str + ":" + min_str		
+		case else:
+			if it_was_save=NO then
+				html_setting_status(stg_num)=setting_sg(setting_name,0,setting_val,EN_STG_GET)
+			else
+				setting_sg(setting_name,0,setting_val,EN_STG_GET)	
+			end if	
+		end select
+		b = b + 1
+		if setting_input_type = "L" then
+			sock_setsend(setting_str)
+			sock_setsend("</td>")
+			sock_setsend("<td width=33%><select name="+chr(34)+setting_name+chr(34)+" size =1 STYLE='width: 100%' tabindex ='"+str(b)+"'>")
+			pos1 = 1
+			pos2=instr(1,setting_option,";",1)
+			
+			while pos2<>0
+				s = mid(setting_option,pos1,pos2-pos1)
+				sock_setsend("<option ")
+				pos1 = instr(1,s,"-",1)
+				if left(s,pos1-1)=setting_val then
+					sock_setsend("selected="+chr(34)+"selected"+chr(34)+" ")
+				end if
+				sock_setsend("value="+chr(34)+left(s,pos1-1)+chr(34)+">"+mid(s,pos1+1,len(s)-pos1)+"</option>")
+				pos1=pos2+1
+				pos2=instr(pos1,setting_option,";",1)
+			wend	
+			sock_setsend("</select></td>")
+		else
+			sock_setsend(setting_str)
+			sock_setsend("</td>")
+			sock_setsend("<td width=33%><input type="+chr(34)+"text"+chr(34)+" name="+chr(34)+setting_name+chr(34)+ " maxlength="+chr(34) + setting_input_len + chr(34)+" value="+chr(34))
+			sock_setsend(setting_val)
+			sock_setsend(chr(34)+" size="+chr(34)+"50%"+chr(34)+" tabindex ='"+str(b)+"' class="+chr(34)+"input100"+chr(34)+"></td>")
+		end if
+		
+	'Print the setting status	
+		sock_setsend("<td width=10%>")
+		select case html_setting_status(stg_num)
+		case EN_STG_STATUS_OK:
+			sock_setsend("<font color="+FONT_COLOR_2+">")
+			sock_setsend("OK")
+		case EN_STG_STATUS_INVALID:
+			sock_setsend("<font color="+FONT_COLOR_3+">")
+			sock_setsend("Invalid")
+		case EN_STG_STATUS_UNKNOWN:
+			sock_setsend("<font color="+FONT_COLOR_3+">")
+			sock_setsend("Unfound")
+		case else:
+			sock_setsend("<font color="+FONT_COLOR_3+">")
+			sock_setsend("Failed")
+		end select
+		sock_setsend("</td></tr>")
+		sock_setsend("</tr>")
+	wend
+end sub
+
+'--------------------------------------------------------------------
+public sub html_save_setting
+'Save the setting values
+	dim x, pos, stg_num as byte
+	dim setting_name, char_ascii as string(2)
+	dim char_str as string(1)
+	dim setting_value,temp1, temp2 as string(50)
+	dim pos1, pos2 as byte
+	pos=1
+	x=instr(pos,sock.httprqstring,"=",2)
+	it_was_save=NO
+	while x<>0
+		'doevents
+		it_was_save=YES
+		setting_name=mid(sock.httprqstring,x-2,2)
+		stg_num=setting_find(setting_name)
+		if stg_num<>0 then
+			stg_num=stg_num-1
+			setting_value = get_http_argument(sock.httprqstring,setting_name+"=")
+			do 
+				pos1 = instr(1,setting_value,"%",1) 
+				if pos1 > 0 then
+					char_ascii = mid(setting_value,pos1+1,2)
+					select case char_ascii
+						case "3A"
+							char_str = ":"
+						case "2F"
+							char_str = "/"
+					end select
+					temp1 = left(setting_value,pos1-1)
+					temp2 = right(setting_value,len(setting_value)-pos1-2)
+					setting_value = temp1 + char_str + temp2
+				end if	
+			loop while pos1 > 0
+			select case setting_name
+			case "TD":
+				pos1 = instr(1,setting_value,"/",1)
+				pos2 = instr(pos1+1,setting_value,"/",1)
+				if clock_set_time(mid(setting_value,pos2+1,4),mid(setting_value,pos1+1,2),mid(setting_value,1,2),"","","00",no) = true then
+					html_setting_status(stg_num) = EN_STG_STATUS_OK
+				else
+					html_setting_status(stg_num) = EN_STG_STATUS_INVALID
+				end if
+				ui_clock_force_print = YES
+			case "TT":
+				if clock_set_time("","","",mid(setting_value,1,2),mid(setting_value,4,2),"00",no) = true then
+					html_setting_status(stg_num) = EN_STG_STATUS_OK
+				else
+					html_setting_status(stg_num) = EN_STG_STATUS_INVALID
+				end if
+				ui_clock_force_print = YES
+			case "TZ"
+				TZOffset_flag = YES
+				html_setting_status(stg_num)=setting_sg(setting_name,0,setting_value,EN_STG_SET)
+			case else
+				html_setting_status(stg_num)=setting_sg(setting_name,0,setting_value,EN_STG_SET)
+			end select
+		end if
+		pos=x+1
+		x=instr(pos,sock.httprqstring,"=",1)
+	wend	
+end sub
+
+'--------------------------------------------------------------------
+public sub print_event_table
+'This subroutin prints the event table according the criterias (ID, year, month, date, hour, minute, second, event type)
+	dim sCategory, sYear, sMonth, sDate, sHour, sMin, sSec, sEvent as string(8)
+	dim sATime, sBTime, sTime as string(22)
+	dim sID as string(11)
+	dim sPage as string(6)
+	dim ei,temp_ei_1,temp_ei_2 as event_item	
+	dim bDirect, item_per_page as byte
+	dim wTemp_Index as word	
+	sID=get_http_argument(sock.httprqstring,"ID=")
+	item_per_page = LOG_ITEM_PER_PAGE
+	sYear = get_http_argument(sock.httprqstring,"ayear=")
+	sMonth = get_http_argument(sock.httprqstring,"amonth=")
+	sDate = get_http_argument(sock.httprqstring,"adate=")
+	sHour =get_http_argument(sock.httprqstring,"ahour=")
+	sMin =get_http_argument(sock.httprqstring,"aminute=")
+	sSec =get_http_argument(sock.httprqstring,"asecond=")
+	sPage =get_http_argument(sock.httprqstring,"page=")
+	wEventcount = event_get_eventcount
+	
+	if get_http_argument(sock.httprqstring,"fm=") = "yes" then
+		event_fd_init
+		lcd_print_bar(85,id_y+14,20,5,mem_usage)
+	end if
+	if sPage = "" then
+		html_log_head = 0
+	end if
+	if sYear = "" then
+		sYear = "2000"
+	end if
+	if sMonth = "" then
+		sMonth = "1"
+	end if
+	if sDate = "" then
+		sDate = "1"
+	end if
+	if sHour = "" then
+		sHour = "0"
+	end if
+	if sMin = "" then 
+		sMin = "0"
+	end if 
+	if sSec = ""then 
+		sSec = "0"
+	end if
+	
+	sATime = chr(TAB)+sYear+chr(TAB)+sMonth+chr(TAB)+sDate+chr(TAB)+sHour+chr(TAB)+sMin+chr(TAB)+sSec+chr(TAB)
+
+	sYear = get_http_argument(sock.httprqstring,"byear=")
+	sMonth = get_http_argument(sock.httprqstring,"bmonth=")
+	sDate = get_http_argument(sock.httprqstring,"bdate=")
+	sHour =get_http_argument(sock.httprqstring,"bhour=")
+	sMin =get_http_argument(sock.httprqstring,"bminute=")
+	sSec =get_http_argument(sock.httprqstring,"bsecond=")
+	
+	if sYear = "" then
+		sYear = "2099"
+	end if
+	if sMonth = "" then
+		sMonth = "12"
+	end if
+	if sDate = "" then
+		sDate = "31"
+	end if
+	if sHour = "" then
+		sHour = "23"
+	end if
+	if sMin = "" then 
+		sMin = "59"
+	end if 
+	if sSec = "" then 
+		sSec = "59"
+	end if
+	sBTime = chr(TAB)+sYear+chr(TAB)+sMonth+chr(TAB)+sDate+chr(TAB)+sHour+chr(TAB)+sMin+chr(TAB)+sSec+chr(TAB)
+	sEvent = get_http_argument(sock.httprqstring,"event=")		
+	log_counter = 0	
+
+	select case sPage
+	case "prev":
+		bDirect = 1
+		item_per_page = 0
+		goto indexing
+	case "next":
+		bDirect = 0 
+	case "","top":
+		html_log_head = wEventcount + 1
+		bDirect = 0
+	case "bottom":
+		html_log_tail = 0
+		bDirect = 1
+	end select	
+	if fd.open (LOG_FILE) <>PL_FD_STATUS_OK then 
+		wEventcount = 0
+	 
+	end if		
+	while log_counter < item_per_page 
+indexing:		
+		if bDirect = 0 then
+			html_log_head = html_log_head - 1		
+		else 
+			html_log_tail = html_log_tail + 1		
+		end if
+query:	
+		'doevents		
+		if bDirect = 0 and html_log_head > 0 then
+			ei = event_query(sEvent,sID,sATime,sBTime,html_log_head,bDirect)
+		end if		
+		if bDirect = 1 and html_log_tail < wEventcount+1 then	
+			ei = event_query(sEvent,sID,sATime,sBTime,html_log_tail,bDirect)
+		end if	
+		if ei.sID <>"" then
+			 last_found_index = ei.wIndex
+		end if
+		log_counter = log_counter + 1
+		if bDirect = 0 then
+			if log_counter = 1 then	
+				html_log_tail = ei.wIndex
+			end if
+			if html_log_head = 0 then
+				html_log_head = last_found_index
+				exit while
+			end if
+			if html_log_tail > wEventcount then
+				html_log_tail = last_found_index				
+			end if
+		else
+			if not(html_log_tail > wEventcount) then
+				item_per_page = item_per_page + 1
+			end if		
+			if log_counter = 1 then	
+				html_log_head = ei.wIndex
+			end if	
+
+			if log_counter = LOG_ITEM_PER_PAGE or html_log_tail > wEventcount then
+				html_log_tail = last_found_index
+				html_log_head = html_log_tail
+				bDirect = 0
+				log_counter = 0
+				goto query
+			end if
+			
+			goto indexing
+		end if	
+		select case ei.eCategory 
+			case EVENT_IN: sCategory = "IN"	
+			case EVENT_OUT: sCategory = "OUT"
+			case EVENT_TEMPIN: sCategory = "TEMP IN"
+			case EVENT_TEMPOUT: sCategory = "TEMP OUT"
+		end select
+		sMonth = str(month(ei.wDaycount))
+		sDate = str(date(ei.wDaycount))
+		sHour = str(hours(ei.wMincount))
+		sMin = str(minutes(ei.wMincount))
+		sSec = str(ei.bSec)
+		if len(sMonth) <2 then 
+			sMonth = "0" + sMonth 
+		end if
+		if len(sDate) <2 then 
+			sDate = "0" + sDate 
+		end if
+		if len(sHour) <2 then 
+			sHour = "0" + sHour 
+		end if
+		if len(sMin) <2 then 
+			sMin = "0" + sMin 
+		end if
+		if len(sSec) <2 then 
+			sSec = "0" + sSec 
+		end if
+		sTime = str(year(ei.wDaycount)+2000)+"-"+sMonth+"-"+sDate+" "+sHour+":"+sMin+":"+sSec
+		sock_setsend("<tr>")
+		sock_setsend("<td width=33%>"+sTime+"</td>")
+		sock_setsend("<td width=33%>"+sCategory+"</td>")
+		sock_setsend("<td width=33%>"+ei.sID+"</td>")
+		sock_setsend("</tr>")
+	wend
+	
+	wTemp_Index = html_log_head-1
+	if wTemp_Index > 0 then
+		temp_ei_1 = event_query(sEvent,sID,sATime,sBTime,wTemp_Index,0)
+		if temp_ei_1.sID = "" then
+			is_next_page = NO
+		else
+			is_next_page = YES
+		end if
+	else
+		is_next_page = NO
+	end if
+	
+	wTemp_Index = html_log_tail+1
+	temp_ei_2 = event_query(sEvent,sID,sATime,sBTime,wTemp_Index,1)
+	if temp_ei_2.sID = "" then
+		is_prev_page = NO
+	else
+		is_prev_page = YES
+	end if
+end sub
+
+'--------------------------------------------------------------------
+public sub sock_setsend(byref s as string)
+'Making sure the tx buffer is free before adding more data to the buffer.
+	while sock.txfree<len(s)
+		'doevents
+		if sock.num >= SOCK_HTTP and sock.num < SOCK_HTTP+NUM_HTTP_PORTS then
+			if sock.statesimple = PL_SSTS_CLOSED then 
+				sock.txclear
+				exit sub
+			end if
+		else
+			for sock.num = SOCK_HTTP to SOCK_HTTP+NUM_HTTP_PORTS-1
+				sock.close
+			next sock.num
+			exit sub
+		end if
+	wend
+	sock.setdata(s)
+	sock.send
+end sub
+

@@ -1,0 +1,75 @@
+'=============================================================
+'		LCD_LIBRARY.TBS
+'=============================================================
+declare sub lcd_clear(x as byte, y as byte, width as byte, height as byte)
+declare sub lcd_print_msg(msg as string,x as byte, y as byte, w as byte, h as byte, bolder as no_yes)
+declare sub lcd_disable_dhcp
+
+declare sub lcd_init
+declare sub lcd_set_contrast(level as byte)
+declare sub lcd_clear_screen
+declare sub lcd_show_ID(x as word, y as word, byref sID as string(ID_LEN), byref sResult as string(50))
+declare sub lcd_print_logo
+declare sub lcd_display_button(F1_ADD as word,F2_ADD as word,F3_ADD as word,F4_ADD as word, byref on_off as string(4),repaint as no_yes, revert as no_yes)
+declare sub lcd_print_header
+declare sub lcd_print_bar(x as byte, y as byte, w as byte, h as byte, per as byte)
+
+
+
+	#if LCD_TYPE=SAMSUNG_S6B0108
+		CONST BMP_IN_XOFFSET = 1
+		CONST BMP_OUT_XOFFSET = 24
+		CONST BMP_TIN_XOFFSET = 47
+		CONST BMP_TOUT_XOFFSET = 70
+		CONST BMP_CANCEL_XOFFSET = 93
+		CONST BMP_ENTER_XOFFSET = 116
+		CONST BMP_UP_XOFFSET = 139
+		CONST BMP_DOWN_XOFFSET = 162
+		CONST BMP_MOVE_XOFFSET = 185
+		CONST BMP_ROLL_XOFFSET = 208
+		CONST BMP_YES_XOFFSET = 231
+		CONST BMP_NO_XOFFSET = 254
+		CONST BMP_MENU_XOFFSET = 277
+		CONST BMP_BS_XOFFSET = 300
+		CONST BMP_NONE = 0
+		CONST LCD_FIX_FONT = "Tibbo-5x7(V).bin"
+		CONST LCD_STD_FONT = "Tibbo-5x7(VP).bin"
+		CONST FONT_HEIGHT = 7
+		CONST ICON_FILE = "icon_SAM.bmp"
+		CONST LCD_BACKCOLOR = 0
+		CONST LCD_FORECOLOR = 65535
+		CONST LCD_VERSPACE = 1
+		CONST CLOCK_Y_OFFSET = 0
+		CONST CK_ID_Y_OFFSET = 0
+		CONST UI_CLOCK_X = 20
+		CONST UI_CLOCK_Y = 1
+	#elif LCD_TYPE=HIMAX_HX8309
+		CONST BMP_IN_XOFFSET = 1
+		CONST BMP_OUT_XOFFSET = 30
+		CONST BMP_TIN_XOFFSET = 59
+		CONST BMP_TOUT_XOFFSET = 88
+		CONST BMP_CANCEL_XOFFSET = 117
+		CONST BMP_ENTER_XOFFSET = 146
+		CONST BMP_UP_XOFFSET = 175
+		CONST BMP_DOWN_XOFFSET = 204
+		CONST BMP_MOVE_XOFFSET = 233
+		CONST BMP_ROLL_XOFFSET = 262
+		CONST BMP_YES_XOFFSET = 291
+		CONST BMP_NO_XOFFSET = 320
+		CONST BMP_MENU_XOFFSET = 349
+		CONST BMP_BS_XOFFSET = 378
+		CONST BMP_NONE = 0
+		CONST LCD_FIX_FONT = "se_11x7(V).bin"
+		CONST LCD_STD_FONT = "se_11x7(VP).bin"
+		CONST FONT_HEIGHT = 14
+		CONST ICON_FILE = "icon_HIM.bmp"
+		CONST LCD_BACKCOLOR = 55824
+		CONST LCD_FORECOLOR = 65535
+		CONST LCD_VERSPACE = 4
+		CONST CLOCK_Y_OFFSET = 30
+		CONST CK_ID_Y_OFFSET = 20
+		CONST UI_CLOCK_X = 20 
+		CONST UI_CLOCK_Y = 20
+	#endif
+
+CONST LCD_LARGE_FONT = "digits-24x16(V).bin"

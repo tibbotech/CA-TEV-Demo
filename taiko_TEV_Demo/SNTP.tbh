@@ -1,0 +1,22 @@
+'=============================================================
+'	SETTINGS.TBS
+'=============================================================
+
+declare function ConnectToTimeServer(sTimeServerIP as string, sTimeServerPort as string) as byte
+declare sub GetSNTPTime(byref wYears as word,byref wMonthes as word,byref wDays as word,byref wHours as word,byref wMinus as word,byref wSeconds as word)
+declare function SNTPQuery as byte
+declare sub InitSNTP 
+declare sub SNTPAutoSync
+declare sub GetRealTime(byref wRTCDays as word, byref wRTCMinutes as word, byref wRTCSecs as byte) 
+declare sub SetRealTime(byref wRTCDays as word, byref wRTCMinutes as word, byref wRTCSecs as byte) 
+declare sub date_time_str(byref date_str as string(14), byref hr_str as string(2),byref min_str as string(2), byref sec_str as string(2),byref wday_str as string(3))
+declare function clock_set_time(sYear as string(4), sMonth as string(2), sDate as string(2), sHour as string(2), sMin as string(2), sSec as string(2),UTC_time as no_yes) as boolean
+
+enum sntp_states 
+	SNTP_IDLE,
+	SNTP_CONNECTING,
+	SNTP_QUERYING,
+	SNTP_DISCONNECTING,
+	SNTP_CONNECT_FAIL,
+	SNTP_TIME_SYNC_OK
+end enum

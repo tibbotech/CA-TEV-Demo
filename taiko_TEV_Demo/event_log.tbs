@@ -1,0 +1,286 @@
+include "global.tbh"
+
+public dim wEventcount as word
+public dim etype as event_type
+public dim mem_usage as byte
+dim wEventIndex as word
+dim bEventsize as byte
+
+'------------------------------------------------------------------------------
+function event_fd_error(result as pl_fd_status_codes) as string 
+'convert fd status code to corresponding error message
+	select case result
+		case PL_FD_STATUS_OK
+			event_fd_error = ""
+			exit function
+		case PL_FD_STATUS_FAIL
+			event_fd_error = "FAIL"
+			exit function
+		case PL_FD_STATUS_CHECKSUM_ERR
+			event_fd_error = "CHECKSUM ERROR"
+			exit function
+		case PL_FD_STATUS_FORMAT_ERR
+			event_fd_error = "FORMAT ERROR"
+			exit function
+		case PL_FD_STATUS_INV_PARAM
+			event_fd_error = "INVALID PARAM"
+			exit function  
+		case PL_FD_STATUS_DUPLICATE_NAME
+			event_fd_error = "DUP FILENAME"
+			exit function
+		case PL_FD_STATUS_FILE_TABLE_FULL
+			event_fd_error = "F_TABLE FULL"
+			exit function
+		case PL_FD_STATUS_DATA_FULL
+			event_fd_error = "MEMORY FULL"
+			exit function
+		case PL_FD_STATUS_NOT_READY
+			event_fd_error = "DISK N_READY"
+			exit function
+		case PL_FD_STATUS_NOT_FOUND
+			event_fd_error = "FILE N_FOUND"
+			exit function
+		case PL_FD_STATUS_NOT_OPENED
+			event_fd_error = "FILE N_OPEN"
+			exit function
+	end select
+end function
+
+'------------------------------------------------------------------------------
+function event_fd_OK(result as pl_fd_status_codes) as boolean
+'This function checks the status code of fd operation. If fd status is not valid (PL_FD_STATUS_OK), display error message on the lcd according to the status code
+	if result <> PL_FD_STATUS_OK then
+		event_fd_OK = false
+'		lcd_print_msg(event_fd_error(result),21,30,lcd.width-42,10,yes)
+		exit function
+	else
+		event_fd_OK = true
+		exit function 
+	end if
+end function
+
+'------------------------------------------------------------------------------
+public function event_fd_init as pl_fd_status_codes
+'Initialize the file disk space, format, mount, and recreate the log file.  Also set the record count to 0.
+	dim result as pl_fd_status_codes
+	result = fd.format(fd.availableflashspace -50, 16)
+	if event_fd_OK(result) then
+		result = fd.mount
+		if event_fd_OK(result) then
+			result = fd.create(LOG_FILE)
+			if event_fd_OK(result) then		
+				wEventcount = 0
+				result = fd.open(LOG_FILE)
+				if event_fd_OK(result) then
+					fd.setpointer(1)
+					fd.setdata(chr(20))
+					fd.setpointer(1)
+					fd.setdata(chr(wEventcount/256)+chr(wEventcount mod 256))
+				else
+					event_fd_init = result
+					exit function
+				end if
+			else
+				event_fd_init = result
+				exit function
+			end if
+		else
+			event_fd_init = result
+			exit function
+		end if
+	else
+		event_fd_init = result
+		exit function
+	end if
+	event_fd_init = PL_FD_STATUS_OK
+end function
+
+'------------------------------------------------------------------------------
+public function event_get_eventcount() as word
+'Read the first 2 byte of the Log file, and convert them to a word value. This value is the event count.  This function also calculate the percentage of used filedisk space.  
+	dim	wEC as word
+	dim s as string(2)
+	dim result as pl_fd_status_codes
+	dim dTemp,dTemp2,dTemp3 as dword
+	result = fd.open(LOG_FILE)
+	if result = PL_FD_STATUS_OK  then
+		fd.filenum = 0
+		fd.setpointer(1)
+		s = fd.getdata(2)
+		wEC = asc(left(s,1))*256+asc(right(s,1))
+		fd.setpointer(fd.filesize)
+		fd.close
+	else
+		event_fd_init
+		wEC = 0
+	end if
+	event_get_eventcount = wEC			'calculating the percentage of used file disk space
+	dTemp2 = wEventcount
+	dTemp3 = bEventsize
+	dTemp = dTemp2*dTemp3
+	dTemp = dTemp/256
+	dTemp = dTemp*100/fd.capacity
+	mem_usage = dTemp
+	exit function
+end function
+
+'------------------------------------------------------------------------------
+public function event_query(sEvents as string(1),byref sID as string(16),byref sTime_start as string(25), byref sTime_end as string(25), byref wEventindex as word, query_direct as byte) as event_item
+'This is a bi-directional query function.  If returns the first record that fits the criteria defined in the function parameters and move the pointer "wEventindex" to that record 
+	dim i, wADaycount, wAMincount,wBDaycount, wBMincount as word
+	dim pos(7) as byte
+	dim stime(6) as string(4)
+	dim ei as event_item
+	dim s as string(40)
+	dim unconditional as no_yes
+	if len(sID) > 0 and len(sID) < ID_LEN then sID = sID + strgen(ID_LEN-len(sID)," ")
+	for i = 0 to 6 
+		pos(i) = instr(1,sTime_start,chr(TAB),i+1)
+	next i
+	for i = 0 to 5
+		stime(i) = mid(sTime_start,pos(i)+1,pos(i+1)-pos(i)-1)
+	next i
+
+	wADaycount = daycount(val(stime(0))-2000,val(stime(1)),val(stime(2)))
+	wAMincount = mincount(val(stime(3)),val(stime(4)))
+	for i = 0 to 6 
+		pos(i) = instr(1,sTime_end,chr(TAB),i+1)
+	next i
+	for i = 0 to 5
+		stime(i) = mid(sTime_end,pos(i)+1,pos(i+1)-pos(i)-1)
+	next i
+	wBDaycount = daycount(val(stime(0))-2000,val(stime(1)),val(stime(2)))
+	wBMincount = mincount(val(stime(3)),val(stime(4)))
+	
+get_event:	
+	if wEventcount > 0 then
+		 while true
+			'doevents
+
+			if event_fd_OK(fd.open (LOG_FILE)) then
+				fd.setpointer(3+((wEventindex-1)*bEventsize))
+				s = fd.getdata(bEventsize)
+				ei.wIndex = asc(mid(s,1,1))*256 + asc(mid(s,2,1))
+				ei.eCategory = asc(mid(s,4,1))
+				ei.wDaycount = asc(mid(s,6,1))*256 + asc(mid(s,7,1))
+				ei.wMincount = asc(mid(s,9,1))*256 + asc(mid(s,10,1))
+				ei.bSec = asc(mid(s,12,1))
+				ei.sID = mid(s,14,ID_Len)			
+				' if the criteria is all empty, no checking, return the next record right away
+				if len(sEvents)	+ len(sID) = 0 and wADaycount = 0 and wAMincount = 0 and wBDaycount = 36524 and wBMincount = 1439 then 
+					event_query = ei
+					exit function 
+				end if
+				'check for the "Event Type", if a record is found, process to check for the "After time", otherwise go to next item
+				if sEvents = "" or val(sEvents) = ei.eCategory then
+					goto atime
+				end if
+				goto next_item
+atime:			'check for the "After time"	If the record entry time is bigger than the "After time", the process start check if the entry time is smaller than "Before Time", otherwise go to next item
+				if wADaycount < ei.wDaycount then 
+					goto btime
+				end if
+				if wADaycount = ei.wDaycount and wAMincount < ei.wMincount then
+					goto btime
+				end if
+				if wADaycount = ei.wDaycount and wAMincount = ei.wMincount then
+					goto btime
+				end if
+				goto next_item
+btime:			'check for the "Before time", if the record entry time is smaller than the "Before time" proceed to check for ID, otherwise go to next item
+				if wBDaycount > ei.wDaycount then 
+					goto ID
+				end if
+				if wBDaycount = ei.wDaycount and wBMincount > ei.wMincount then
+					goto ID
+				end if
+				if wBDaycount = ei.wDaycount and wBMincount = ei.wMincount then
+					goto ID
+				end if
+				goto next_item
+				'check if the record ID fits the criteria, if so, return the record, otherwise go to next record
+ID:				if sID = ei.sID or sID = "" then
+					event_query = ei
+					exit function
+				end if
+next_item:	'Increase or decrease the pointer according to the query direction, when pointer reaches the first or the last record, exit the function.
+			end if
+			if query_direct = 1 then
+				wEventindex = wEventindex+ 1
+				if wEventindex > wEventcount then
+					exit function
+				end if 
+			else
+				wEventindex = wEventindex-1
+				if wEventindex < 1 then
+					exit function
+				end if 
+			end if
+		wend
+	end if 	
+end function
+
+
+'------------------------------------------------------------------------------
+public sub event_log_init
+'Call the event_fd_init and set all nessesary global variables to their default value (bEventsize, eType, wEventcount)
+	dim result as pl_fd_status_codes	
+	dim s as string	
+	bEventsize = 14+ID_LEN
+	etype = EVENT_IN
+	if Not event_fd_OK(fd.mount) then
+		event_fd_init
+	end if 
+	wEventcount = event_get_eventcount
+end sub
+
+'------------------------------------------------------------------------------
+public function event_set(sID as string(10)) as string(20)
+'Store the record, move the pointer and calculate the used percentage of the file disk space.
+	dim s as string	
+	dim wIndex as word
+	dim bSysSec as byte
+	dim wSysDaycount, wSysMincount as word
+	dim result as pl_fd_status_codes
+	dim dTemp, dTemp2, dTemp3 as dword
+	if len(sID) < ID_LEN then sID = sID + strgen(ID_LEN-len(sID)," ")
+	
+	wEventcount = event_get_eventcount
+	if event_fd_OK(fd.open(LOG_FILE)) then
+		if wEventcount > 0 then
+			fd.setpointer(3+(wEventcount-1)*bEventsize)
+			s = fd.getdata(2)
+			wIndex = asc(left(s,1))*256+asc(right(s,1))
+		else	
+			wIndex = 0
+		end if
+		GetRealTime(wSysDaycount,wSysMincount,bSysSec)
+		wIndex = wIndex+1
+		s = chr(wIndex/256)+chr(wIndex mod 256)+chr(TAB)+chr(eType)+chr(TAB)+chr(wSysDaycount/256)+chr(wSysDaycount mod 256)+chr(TAB)+chr(wSysMincount/256)+chr(wSysMincount mod 256)+chr(TAB)+chr(bSysSec)+chr(TAB)+sID+chr(CR)
+		wEventcount = wEventcount + 1 
+		fd.setpointer(1)
+		result = fd.setdata(chr(wEventcount/256)+chr(wEventcount mod 256))
+		if result <> PL_FD_STATUS_OK then 
+			event_set = event_fd_error(result)
+			exit function
+		end if
+		fd.setpointer(fd.filesize + 1)
+		result = fd.setdata(s)
+		if result <> PL_FD_STATUS_OK then 
+			event_set = event_fd_error(result)
+			exit function
+		end if
+		fd.close
+	end if
+	
+	'calculating the percentage of used file disk space		
+	dTemp2 = wEventcount
+	dTemp3 = bEventsize
+	dTemp = dTemp2*dTemp3
+	dTemp = dTemp/256
+	dTemp = dTemp*100/fd.capacity
+	mem_usage = dTemp
+	
+	event_set = ""
+end function
+

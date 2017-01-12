@@ -1,0 +1,29 @@
+'=============================================================
+'
+'	This file contains the all error messages that would 
+'	display on the LCD
+'=============================================================
+
+
+CONST EMPTY_FOLDER = "This folder is empty"
+CONST SYS_ERROR = "System Error! Please reboot!"
+CONST INVALID_INPUT = "Invalid input type!"
+CONST SETTING_GET_FAIL = "Fail to retrieve the setting!"
+CONST SETTING_SET_FAIL = "Fail to save the setting!"
+CONST SETTING_UNKNOWN = "Unknown Setting Name!"
+CONST SETTING_INVALID = "Invalid Setting Value!"
+CONST DHCP_FAIL = "DHCP Failed!`Disabling DHCP.."
+CONST COMMAND_REJECTED = "Command Rejected!" 
+CONST COMMAND_ERROR = "Command Unknown!"
+CONST COMMAND_DENIED = "Command Denied!"
+CONST COMMAND_FAILED = "Fail to execute command!"
+CONST COMMAND_NO_RESPOND = "Getting no respond from the Command"
+CONST COMMAND_INITIALIZE = "Would you like to Initialize the device? (Y/N)"
+CONST COMMAND_REBOOT = "Would you like to Reboot the device? (Y/N)"
+CONST COMMAND_TIME_SYNC = "Synchronize the clock with a time server now? (Y/N)"
+CONST COMMAND_CLEAR_LOG = "All log data will be lost. Continue? (Y/N)"
+CONST EXIT_MENU = "Exit Menu without Reboot? (Y/N)"
+CONST TIME_SYNC = "Clock Time is updated"
+CONST TS_CONNECT_FAIL = "Fail to connect to Time Server, please check network setting and Time Server IP"
+CONST MSCARD_ENROLL_NOTE = "To initialize this device, please set the Master Card. Read any card now, it will become the Master Card." 
+CONST MACARD_SET = "Master Card has been set. Press any key to continue."

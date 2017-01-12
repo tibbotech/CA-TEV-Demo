@@ -1,0 +1,38 @@
+
+<?
+	include "global.tbh"
+	declare login_session as string(SESSION_LEN)
+	declare html_login_state as login_state
+?>
+<html>
+<HEAD>
+<META HTTP-EQUIV="Expires" CONTENT="Tue, 01 Jan 1980 1:00:00 GMT">
+<META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+<script type="text/javascript">
+function IndexPage()
+  {
+  window.top.location.replace("Index.html")
+  }
+</script>
+
+</HEAD>
+
+<body bgcolor="#7878DC"<? login_verify ?>>
+<font face="arial" color = "#FFFFFF">
+<? if html_login_state <> LOGIN then goto finish?>
+<h3>Tibbo Technology</h3>
+<a href = 'general.html?session=<?sock_setsend(login_session)?>' target = showframe> General Settings </a> <br>
+<br>
+<a href = 'Network.html?session=<?sock_setsend(login_session)?>' target = showframe> Network Settings </a> <br>
+<br>
+<a href = 'time.html?session=<?sock_setsend(login_session)?>' target = showframe> Date/Time Settings </a> <br>
+<br>
+<a href = 'log.html?session=<?sock_setsend(login_session)?>' target = showframe> Event Log </a> <br>
+<br>
+<a href = 'login.html?logout=yes' target = _top> Log out </a> <br>
+</font>
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+<font face="arial" color = "#FFFFFF"><?sock.setdata("MAC: "+net.mac) sock.send?></font>
+</BODY>
+<?finish:?>
+</html>

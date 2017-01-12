@@ -1,0 +1,12 @@
+'=============================================================
+'		UI_CLOCK.TBS
+'=============================================================
+enum ui_clock_results
+	CLOCK_RESULT_OK,
+	CLOCK_RESULT_FAIL
+end enum
+
+declare function ui_clock(x as word, y as word, force_print as no_yes) as ui_clock_results
+declare sub ui_clock_key_proc(key_event as pl_kp_event_codes, key_code as byte)
+declare sub ui_clock_timer_proc
+declare sub ui_clock_card_read(byref sID as string(ID_LEN))

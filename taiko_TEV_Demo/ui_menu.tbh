@@ -1,0 +1,33 @@
+'=============================================================
+'		UI_MENU.TBS
+'=============================================================
+
+const MENU_MAX_LVL = 5
+const MENU_MAX_ITEM_PER_LVL = 30
+enum ui_menu_results
+	MENU_RESULT_OK
+	MENU_RESULT_TIMEOUT
+end enum
+
+declare function ui_menu(
+	x_coord as word,
+	y_coord as word,
+	width as word,
+	height as word,
+	byref menu_states as string(MENU_MAX_LVL),
+	byref menu_descriptor_file as string(20),
+	ver_spacing as byte,
+	access_level as byte, 
+	timeout as byte
+	) as ui_menu_results
+declare sub ui_menu_key_proc(key_event as pl_kp_event_codes, key_code as byte)
+
+declare sub ui_menu_timer_proc
+
+enum menu_input_type
+	MENU_INPUT_BOX
+	MENU_LIST_BOX
+	MENU_SLIDE_BOX
+	MENU_MSG_BOX
+	MENU_IDLE
+end enum

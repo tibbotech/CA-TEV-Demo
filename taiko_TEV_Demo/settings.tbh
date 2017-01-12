@@ -1,0 +1,39 @@
+'=============================================================
+'		SETTINGS.TBS
+'=============================================================
+const MAX_NUM_SETTINGS=31
+const MAX_SETTING_NAME_LEN=3
+
+enum en_stg_rdwr
+	EN_STG_GET,			'Read operation
+	EN_STG_SET			'Write operation
+end enum
+
+'Status codes for setting-related operations
+enum en_stg_status	
+	EN_STG_STATUS_OK,				'Operation completed successfully
+	EN_STG_STATUS_UNKNOWN,			'Unknown setting (mnemonic not recognized)
+	EN_STG_STATUS_INVALID_INDEX,	'Invalid index (out-of-range)
+	EN_STG_STATUS_FAILURE,			'Read failure (checksum error) or write failure (EEPROM trouble)
+	EN_STG_STATUS_INVALID			'Invalid setting value
+end enum
+
+type sdr_type
+	name as string(MAX_SETTING_NAME_LEN) 'name
+	stype as byte
+	members as byte
+	p1 as word
+	p2 as word
+	ini as byte
+	eeaddr as word
+	romaddr_def as word
+	member_size as byte
+end type
+
+declare sub setting_error_detected
+declare sub settings_init
+declare function settings_restore_def(init_field_override as no_yes) as en_stg_status
+declare function setting_get(byref stg_name as string, index as byte) as string
+declare function setting_sg(byref stg_name as string, index as byte, byref stg_value as string, op as en_stg_rdwr) as en_stg_status
+declare function setting_get_def(byref stg_name as string, byref def_value as string) as en_stg_status
+declare function setting_find(byref stg_name as string(2)) as byte

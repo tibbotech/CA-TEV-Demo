@@ -1,0 +1,26 @@
+'=============================================================
+'		EVENT_LOG.TBS
+'=============================================================
+const ID_LEN = 10
+const LOG_FILE = "Event_Log.txt"
+enum event_type 
+	EVENT_IN,
+	EVENT_OUT,
+	EVENT_TEMPIN,
+	EVENT_TEMPOUT
+end enum
+type event_item
+	wIndex as word
+	sID as string(ID_LEN)	
+	eCategory as event_type
+	wDaycount as word
+	wMincount as word
+	bSec as byte
+end type
+
+declare function event_set(sID as string(10)) as string(20)
+declare sub event_log_init
+declare function event_fd_init as pl_fd_status_codes
+declare function event_query(sEvents as string(1),byref sID as string(16),byref sTime_start as string(25), byref sTime_end as string(25), byref wEventindex as word, query_direct as byte) as event_item
+declare function event_get_eventcount as word
+

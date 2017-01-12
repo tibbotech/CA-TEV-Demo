@@ -1,0 +1,6 @@
+Setting	Setting					Setting 
+Name	String					Data
+
+>>ON	Owner name				S,I,6	^
+>>DN	Device name				S,I,6	^
+>>PW	Password				S,I,6	^

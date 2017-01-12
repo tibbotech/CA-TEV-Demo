@@ -1,0 +1,44 @@
+
+const FIRMWARE_VERSION="{ds1.0}"
+const NUM_HTTP_PORTS=3
+
+enum bb_modes
+	BB_7,
+	BB_8	
+end enum
+
+enum br_modes
+	BR_1200,
+	BR_2400,
+	BR_4800,
+	BR_9600,
+	BR_19200,
+	BR_38400,
+	BR_57600,
+	BR_115200,
+	BR_150,
+	BR_300,
+	BR_600,
+	BR_28800
+end enum
+
+enum pr_modes
+	PR_NONE,
+	PR_EVEN,
+	PR_ODD,
+	PR_MARK,
+	PR_SPACE
+end enum
+
+enum fc_modes
+	FC_DIS,
+	FC_EN
+end enum
+
+enum sockets
+	SOCK_UDP=0
+	SOCK_SNTP = 1
+	SOCK_HTTP=2
+	SOCK_DHCP=15
+end enum
+

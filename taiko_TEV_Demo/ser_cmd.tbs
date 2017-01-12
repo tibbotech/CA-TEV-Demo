@@ -1,0 +1,141 @@
+'***********************************************************************************************************
+'			SERIAL COMMAND PROCESSING
+'***********************************************************************************************************
+
+include "global.tbh"
+
+dim ser_prog as no_yes 'serial programming mode
+dim login_tout_ctr as word
+dim ser_cmd as string(80)
+dim br as br_modes
+
+declare param_on,param_dn as string(8)
+declare num_sdf as byte
+declare x_flags as string(10)
+
+'-------------------------------------------------------------
+public sub ser_mode_init 
+	ser.num = SER_COM_NUM
+	ser.enabled = NO
+	ser.baudrate = ser.div9600/(38400/9600)
+	br = BR_38400
+	ser.flowcontrol = DISABLED
+	ser.bits = PL_SER_BB_8
+	ser.interface = PL_SER_SI_FULLDUPLEX
+	ser.mode = PL_SER_MODE_UART
+	ser.parity = PL_SER_PR_NONE
+	ser.rxclear	
+	ser.txbuffrq(1)
+	ser.rxbuffrq(1)
+	sys.buffalloc
+	ser.enabled = YES
+	ser_prog = YES
+end sub
+'-------------------------------------------------------------
+public function proc_ser_cmd(byref s as string(20)) as string(80)
+	dim pos_stx, pos_cr as byte
+	dim timeserver_ip as string(15)
+	ser_cmd = + ser_cmd + s
+	pos_stx = instr(1, ser_cmd, chr(STX), 1)
+	pos_cr = instr(1, ser_cmd, chr(CR), 1)
+	if pos_stx > 0 then
+		if pos_cr > 0 and pos_cr > pos_stx then
+			s = mid(ser_cmd,pos_stx + 1, pos_cr - pos_stx - 1)
+			select case left(s,1)
+			case "O":
+				goto reply_ok
+			case "E":
+				sys.reboot
+			case "I":
+				select case settings_restore_def(NO)
+				case EN_STG_STATUS_OK:
+					goto reply_ok
+				case else:
+					goto reply_failed
+				end select
+			case "S":
+				select case setting_sg(mid(s,2,2),0,right(s,len(s)-3),EN_STG_SET)
+				case EN_STG_STATUS_OK:
+					goto reply_ok_have_data
+				case EN_STG_STATUS_UNKNOWN:
+					goto reply_err
+				case else:
+					goto reply_failed
+				end select
+			case "G":
+				select case setting_sg(mid(s,2,2),0,proc_ser_cmd,EN_STG_GET)
+				case EN_STG_STATUS_OK:
+					goto reply_ok_have_data
+				case EN_STG_STATUS_UNKNOWN:
+					goto reply_err
+				case else:
+					goto reply_failed
+				end select	
+			case "P":
+				goto reply_ok
+			case "X":
+				proc_ser_cmd=net.mac+"/"+setting_get("PN",0)+x_flags+param_on+"/"+param_dn+"/"
+				goto reply_ok_have_data
+
+			case "V":
+				proc_ser_cmd=FIRMWARE_VERSION
+				goto reply_ok_have_data			
+			case "C":
+				proc_ser_cmd=str(num_sdf)
+				goto reply_ok_have_data		
+			case "K":
+				select case setting_sg("TS",0,timeserver_ip,EN_STG_GET)
+				case EN_STG_STATUS_OK:
+					sock.num = SOCK_SNTP
+					if sock.statesimple = PL_SSTS_EST then
+						SNTPQuery
+					else
+						ConnectToTimeServer(timeserver_ip,"")
+					end if
+					goto reply_ok
+				case EN_STG_STATUS_UNKNOWN:
+					goto reply_err
+				case else:
+					goto reply_failed
+				end select	
+			case "D"
+				if event_fd_init = PL_FD_STATUS_OK then
+					goto reply_ok
+				else
+					goto reply_failed
+				end if
+			case "":
+				ser_cmd = ""
+				goto reply_null
+			case else
+				goto reply_err
+			end select
+		end if
+	else
+		goto clear_cmd
+	end if
+
+goto reply_null
+
+reply_rejected:
+	proc_ser_cmd="R"
+	goto clear_cmd
+reply_err:
+	proc_ser_cmd="C"
+	goto clear_cmd
+reply_denied:
+	proc_ser_cmd="D"
+	goto clear_cmd
+reply_failed:
+	proc_ser_cmd="F"
+	goto clear_cmd
+reply_ok_have_data:
+	proc_ser_cmd="A"+proc_ser_cmd
+	goto clear_cmd
+reply_ok:
+	proc_ser_cmd="A"
+	goto clear_cmd	
+clear_cmd:
+	ser_cmd = ""
+reply_null:
+end function

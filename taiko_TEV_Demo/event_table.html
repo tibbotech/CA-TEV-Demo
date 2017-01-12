@@ -1,0 +1,65 @@
+<?
+	include "global.tbh"
+	declare login_session as string(SESSION_LEN)
+	declare html_login_state as login_state
+?>
+<html>
+<HEAD>
+<META HTTP-EQUIV="Expires" CONTENT="Tue, 01 Jan 1980 1:00:00 GMT">
+<META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+<script type="text/javascript">
+function IndexPage()
+  {
+  window.top.location.replace("Index.html")
+  }
+   function disp_confirm()
+{
+var r=confirm("Do you want to delete all records?");
+if (r==true)
+  {
+  document.location.href = "http://<?sock.setdata(net.ip) sock.send?>/event_table.html?session=<?sock.setdata(login_session) sock.send?>&fm=yes&target=table"
+  }
+}
+</script>
+
+</HEAD>
+<BODY bgcolor= "#FFFFFF" <?login_verify?>>
+<? 
+	if html_login_state <> LOGIN or login_session = "" then goto finish
+?>
+<font face="arial">
+<table width=80% align=center>
+<tr>
+
+<td width=70%>
+
+<tr><td>			
+
+			<table width=100% align=center border="1" cellspacing="1" cellpadding="2" >
+					<tr>
+						<td width=33%><font color = <?sock.setdata(FONT_COLOR_1) sock.send?>><b>Time</b></td>
+						<td width=33%><font color = <?sock.setdata(FONT_COLOR_1) sock.send?>><b>Events</b></td>
+						<td width=33%><font color = <?sock.setdata(FONT_COLOR_1) sock.send?>><b>User ID</b></td>
+					</tr>
+
+				<? 
+				if html_login_state = LOGIN then
+					print_event_table 
+				end if
+				?>
+
+			</table>
+
+			<table width=70% align=center border="0" cellspacing="1" cellpadding="2" >
+			<tr>
+			<td width=33% align=left><input type = button onclick="disp_confirm()" value = "   Clear Log   "></td><td width=33%></td><td width=33%>
+			<table align=right border="0"><tr><td><?top_page?></td><td><?prev_page?></td><td><?next_page?></td><td><?bottom_page?></td></tr></table></td>
+			<tr>
+			</table>
+</td></tr>
+</table>
+</font>
+<?finish:?>
+	</BODY>
+
+</HTML>
